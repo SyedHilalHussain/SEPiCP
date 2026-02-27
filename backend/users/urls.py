@@ -1,6 +1,23 @@
 from django.urls import path
-from .views import test_api
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+from .views import (
+    RegisterView,
+    ProfileView,
+    AdminUserListView,
+    AdminDashboardView,
+)
 
 urlpatterns = [
-    path('test/', test_api),
+    # Auth
+    path("register/", RegisterView.as_view()),
+    path("login/", TokenObtainPairView.as_view()),
+    path("refresh/", TokenRefreshView.as_view()),
+
+    # Normal user
+    path("profile/", ProfileView.as_view()),
+
+    # Admin-only
+    path("admin/users/", AdminUserListView.as_view()),
+    path("admin/dashboard/", AdminDashboardView.as_view()),
 ]
