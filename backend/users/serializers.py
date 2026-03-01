@@ -1,8 +1,8 @@
 # Validator + converter
-
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from .models import Dataset
 
 User = get_user_model()
 
@@ -52,3 +52,9 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "username", "email", "is_staff", "is_superuser", "date_joined"]
         read_only_fields = ["id", "email", "is_staff", "is_superuser", "date_joined"]
+
+class DatasetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Dataset
+        fields = ['id', 'original_data', 'cleaned_data', 'created_at']
+        read_only_fields = ['cleaned_data', 'created_at']
