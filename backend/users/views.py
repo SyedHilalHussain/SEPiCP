@@ -59,28 +59,25 @@ class UploadDatasetView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        
+        file_obj = request.FILES.get('data')
 
-        # # If frontend sends raw list directly
-        # if isinstance(request.data, list):
-        #     original_data = request.data
-
-        # If frontend sends {"data": [...]}
-        if isinstance(request.data, dict):
-            original_data = request.data.get("data")
-        else:
+        if not file_obj:
             return Response(
-                {"error": "Invalid data format"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Check if data exists
-        if not original_data:
-            return Response(
-                {"error": "No data provided"},
+                {"error": "No file uploaded"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
+            import pandas as pd
+            
+            # Read excel using pandas
+            df = pd.read_excel(file_obj)
+            
+            # Convert to list of dicts (JSON)
+            original_data = df.to_dict(orient='records')
+            
+            # Clean dataset
             cleaned_data = clean_dataset(original_data)
 
             dataset = Dataset.objects.create(

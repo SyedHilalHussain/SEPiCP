@@ -20,12 +20,14 @@ import { Switch } from '../components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 
+import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
 const UploadPage = () => {
   const { user, logActivity } = useAuth();
   const [file, setFile] = useState(null);
   const [isCleaning, setIsCleaning] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
 
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length > 0) {
@@ -42,10 +44,35 @@ const UploadPage = () => {
     multiple: false
   });
 
-  const handleProcess = () => {
+  const handleProcess = async () => {
     if (file) {
-      logActivity('upload', `Uploaded and processed dataset: ${file.name}`);
-      alert('Data processed successfully and logged to your activity history.');
+      setIsUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('data', file);
+        // Note: Backend views.py expects {"data": [...]} as JSON or file, but for excel we need to adjust views.py or send it properly.
+        // Assuming your backend `views.py` `clean_dataset` handles file or we convert to json first.
+        // wait, let's look at views.py. It expects JSON data.
+
+        // Let's send it as a file upload that the backend can parse
+        const response = await api.post('datasets/upload/', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+
+        const newDataset = response.data;
+
+        logActivity('upload', `Uploaded and processed dataset: ${file.name}`);
+        alert('Data processed successfully and logged to your activity history.');
+        setFile(null); // Clear file after successful upload
+
+      } catch (error) {
+        console.error('Upload failed:', error);
+        alert('Failed to process data. Please check the file format and try again.');
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -197,12 +224,12 @@ const UploadPage = () => {
 
           <div className="flex flex-col sm:flex-row lg:flex-col gap-3">
             <Button
-              disabled={!file}
+              disabled={!file || isUploading}
               onClick={handleProcess}
               className="flex-1 h-12 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center justify-center gap-2"
             >
-              Confirm & Process
-              <ArrowRight className="w-4 h-4" />
+              {isUploading ? 'Processing...' : 'Confirm & Process'}
+              {!isUploading && <ArrowRight className="w-4 h-4" />}
             </Button>
             <Button
               variant="outline"

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import api from '../lib/api';
 import {
   History as HistoryIcon,
   Search,
@@ -29,8 +30,24 @@ import { useAuth } from '../context/AuthContext';
 const HistoryPage = () => {
   const { user, activities } = useAuth();
 
-  // Filter activities to only show the logged-in user's records
-  const userActivities = activities.filter(act => act.userId === user?.id);
+  const [datasets, setDatasets] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const response = await api.get('datasets/');
+        setDatasets(response.data);
+      } catch (error) {
+        console.error('Failed to fetch datasets:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (user) {
+      fetchHistory();
+    }
+  }, [user]);
 
   return (
     <div className="space-y-12 animate-in fade-in duration-700 pb-20">
@@ -75,30 +92,30 @@ const HistoryPage = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {userActivities.length > 0 ? (
-                userActivities.map((item) => (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="h-40 text-center text-slate-400 font-medium">
+                    Loading your history...
+                  </TableCell>
+                </TableRow>
+              ) : datasets.length > 0 ? (
+                datasets.map((item) => (
                   <TableRow key={item.id} className="hover:bg-blue-50/50 transition-colors group border-b border-slate-50 last:border-0">
                     <TableCell className="px-10 py-6">
                       <div className="flex items-center gap-5">
-                        <div className={cn(
-                          "w-14 h-14 rounded-[20px] flex items-center justify-center shadow-inner transition-transform group-hover:scale-110",
-                          item.type === 'login' ? "bg-emerald-50 text-emerald-600" :
-                            item.type === 'analysis' ? "bg-blue-50 text-[#1e3a8a]" :
-                              item.type === 'upload' ? "bg-amber-50 text-amber-600" :
-                                "bg-slate-50 text-slate-600"
-                        )}>
-                          {item.type === 'login' ? <Eye className="w-6 h-6" /> :
-                            item.type === 'analysis' ? <BarChart2 className="w-6 h-6" /> :
-                              <FileSpreadsheet className="w-6 h-6" />}
+                        <div className="w-14 h-14 rounded-[20px] flex items-center justify-center shadow-inner transition-transform group-hover:scale-110 bg-amber-50 text-amber-600">
+                          <FileSpreadsheet className="w-6 h-6" />
                         </div>
-                        <span className="text-[13px] font-black uppercase tracking-widest text-[#1e3a8a]">{item.type}</span>
+                        <span className="text-[13px] font-black uppercase tracking-widest text-[#1e3a8a]">Dataset Upload</span>
                       </div>
                     </TableCell>
                     <TableCell className="px-10 py-6">
-                      <p className="text-sm font-black text-slate-800 leading-relaxed">{item.details}</p>
+                      <p className="text-sm font-black text-slate-800 leading-relaxed">
+                        Processed Dataset #{item.id} ({item.original_data?.length || 0} rows)
+                      </p>
                     </TableCell>
                     <TableCell className="px-10 py-6 text-sm text-slate-500 font-bold">
-                      {new Date(item.timestamp).toLocaleString()}
+                      {new Date(item.created_at).toLocaleString()}
                     </TableCell>
                     <TableCell className="px-10 py-6 text-right">
                       <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl text-slate-400 hover:text-[#1e3a8a] hover:bg-white shadow-sm border border-transparent hover:border-slate-100 transition-all">
@@ -119,7 +136,7 @@ const HistoryPage = () => {
         </div>
 
         <div className="p-6 border-t border-slate-100 bg-slate-50/30 flex items-center justify-between">
-          <p className="text-sm text-slate-500 font-medium">Showing <span className="text-slate-900 font-bold">{userActivities.length}</span> records</p>
+          <p className="text-sm text-slate-500 font-medium">Showing <span className="text-slate-900 font-bold">{datasets.length}</span> records</p>
         </div>
       </Card>
     </div>

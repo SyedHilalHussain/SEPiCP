@@ -1,27 +1,33 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '../lib/api';
 
 const AuthContext = createContext(undefined);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [registeredUsers, setRegisteredUsers] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
 
+  // Initialize from local storage
   useEffect(() => {
-    const savedUser = localStorage.getItem('research_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    const initAuth = async () => {
+      const savedUser = localStorage.getItem('research_user');
+      const token = localStorage.getItem('access_token');
 
-    const savedUsers = localStorage.getItem('registered_users');
-    if (savedUsers) {
-      setRegisteredUsers(JSON.parse(savedUsers));
-    }
+      if (savedUser && token) {
+        // Technically should verify token here, but trusting local storage for now
+        setUser(JSON.parse(savedUser));
+      }
 
-    const savedActivities = localStorage.getItem('research_activities');
-    if (savedActivities) {
-      setActivities(JSON.parse(savedActivities));
-    }
+      const savedActivities = localStorage.getItem('research_activities');
+      if (savedActivities) {
+        setActivities(JSON.parse(savedActivities));
+      }
+
+      setLoading(false);
+    };
+
+    initAuth();
   }, []);
 
   const logActivity = (type, details, targetUser = null) => {
@@ -31,9 +37,8 @@ export const AuthProvider = ({ children }) => {
     const newActivity = {
       id: `act-${Date.now()}`,
       userId: activeUser.id,
-      userName: activeUser.name,
-      userRole: activeUser.role,
-      type, // 'login', 'logout', 'analysis', 'upload'
+      userName: activeUser.username || activeUser.name,
+      type,
       details,
       timestamp: new Date().toISOString(),
     };
@@ -43,87 +48,65 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('research_activities', JSON.stringify(updatedActivities));
   };
 
-  const register = (name, email, password) => {
-    if (registeredUsers.find(u => u.email === email)) {
-      return { success: false, message: 'User already exists.' };
+  const register = async (name, email, password) => {
+    try {
+      const response = await api.post('register/', {
+        username: name,
+        email: email,
+        password: password
+      });
+
+      // Auto login after successful registration
+      return await login(email, password, 'student');
+
+    } catch (error) {
+      console.error('Registration failed:', error);
+      const msg = error.response?.data?.error || error.response?.data?.username?.[0] || error.response?.data?.email?.[0] || 'Registration failed';
+      return { success: false, message: msg };
     }
-
-    const newUser = {
-      id: `stu-${Math.floor(Math.random() * 1000)}`,
-      name,
-      email,
-      password,
-      role: 'student',
-      department: 'Undergraduate Statistics',
-    };
-
-    const updatedUsers = [...registeredUsers, newUser];
-    setRegisteredUsers(updatedUsers);
-    localStorage.setItem('registered_users', JSON.stringify(updatedUsers));
-
-    // Automatically log in after registration
-    setUser(newUser);
-    localStorage.setItem('research_user', JSON.stringify(newUser));
-    localStorage.setItem('research_token', 'student-token-abc');
-    logActivity('login', 'New user registered and logged in', newUser);
-
-    return { success: true };
   };
 
-  const login = (email, password, role) => {
-    // Admin Validation
-    if (role === 'admin') {
-      if (email === 'nedscholar@gmail.com' && password === '123456') {
-        const adminUser = {
-          id: 'admin-001',
-          name: 'Principal Administrator',
-          email: 'nedscholar@gmail.com',
-          role: 'admin',
-          department: 'Executive Research Board',
-        };
-        setUser(adminUser);
-        localStorage.setItem('research_user', JSON.stringify(adminUser));
-        localStorage.setItem('research_token', 'admin-token-xyz');
-        logActivity('login', 'Admin logged into dashboard', adminUser);
-        return { success: true };
-      }
-      return { success: false, message: 'Invalid administrator credentials.' };
-    }
-
-    // Check Registered Users first
-    const registeredUser = registeredUsers.find(u => u.email === email && u.password === password);
-    if (registeredUser) {
-      setUser(registeredUser);
-      localStorage.setItem('research_user', JSON.stringify(registeredUser));
-      localStorage.setItem('research_token', 'student-token-abc');
-      logActivity('login', 'User logged in via credentials', registeredUser);
-      return { success: true };
-    }
-
-    // Student Validation (Simulated fallback)
-    if (role === 'student') {
-      const studentUser = {
-        id: `stu-${Math.floor(Math.random() * 1000)}`,
-        name: email.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '),
+  const login = async (email, password, role) => {
+    try {
+      // Get JWT Tokens
+      const response = await api.post('login/', {
         email: email,
-        role: 'student',
-        department: 'Undergraduate Statistics',
-      };
-      setUser(studentUser);
-      localStorage.setItem('research_user', JSON.stringify(studentUser));
-      localStorage.setItem('research_token', 'student-token-abc');
-      logActivity('login', 'User logged in via simulation', studentUser);
-      return { success: true };
-    }
+        password: password
+      });
 
-    return { success: false, message: 'Select a valid role.' };
+      const { access, refresh } = response.data;
+
+      localStorage.setItem('access_token', access);
+      localStorage.setItem('refresh_token', refresh);
+
+      // Fetch User Profile
+      const profileRes = await api.get('profile/', {
+        headers: { Authorization: `Bearer ${access}` }
+      });
+
+      const userData = profileRes.data;
+
+      setUser(userData);
+      localStorage.setItem('research_user', JSON.stringify(userData));
+
+      logActivity('login', 'User logged in securely', userData);
+      return { success: true };
+
+    } catch (error) {
+      console.error('Login failed:', error);
+      return {
+        success: false,
+        message: error.response?.data?.detail || 'Invalid credentials or server error.'
+      };
+    }
   };
 
   const logout = () => {
     logActivity('logout', 'User logged out');
     setUser(null);
     localStorage.removeItem('research_user');
-    localStorage.removeItem('research_token');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
   };
 
   return (
@@ -134,10 +117,10 @@ export const AuthProvider = ({ children }) => {
       logout,
       logActivity,
       activities,
-      allUsers: registeredUsers,
-      isAuthenticated: !!user
+      isAuthenticated: !!user,
+      loading
     }}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

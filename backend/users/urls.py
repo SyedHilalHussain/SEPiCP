@@ -7,6 +7,7 @@ from .views import (
     AdminUserListView,
     AdminDashboardView,
     UploadDatasetView,
+    UserDatasetListView,
 )
 
 urlpatterns = [
@@ -22,4 +23,7 @@ urlpatterns = [
     # Admin-only
     path("admin/users/", AdminUserListView.as_view()),
     path("admin/dashboard/", AdminDashboardView.as_view()),
+    
+    # Datasets
+    path("datasets/", UserDatasetListView.as_view()),
 ]
