@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Shield, GraduationCap, Lock, Mail, ArrowRight, Info, AlertTriangle, User, Database } from 'lucide-react';
-import { motion,AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 // import { theme } from '../styles/theme';
 import { Button } from '../components/ui/button';
@@ -10,8 +10,7 @@ import { Input } from '../components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 
 const AuthPage = () => {
-  // const { login, register } = useAuth();
-  const { login } = useAuth();
+  const { login, register } = useAuth();
   const [role, setRole] = useState('student');
   const [isRegister, setIsRegister] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -20,7 +19,6 @@ const AuthPage = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -32,55 +30,20 @@ const AuthPage = () => {
 
     setLoading(true);
 
-    // let result;
-    // if (isRegister && role === 'student') {
-    //   result = register(fullName, email, password);
-    // } else {
-    //   result = login(email, password, role);
-    // }
-
-    // if (!result.success) {
-    //   setError(result.message);
-    //   setLoading(false);
-    // }
     try {
+      let result;
       if (isRegister && role === 'student') {
-        const response = await fetch("http://127.0.0.1:8080/api/register/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            username: fullName,   // sending fullName as username
-            email: email,
-            password: password
-          })
-        });
-  
-        const data = await response.json();
-  
-        if (!response.ok) {
-          setError(data.message || "Registration failed");
-          setLoading(false);
-          return;
-        }
-  
-        // success
-        console.log("Registered:", data);
-        setLoading(false);
-  
+        result = await register(fullName, email, password);
       } else {
-        // keep your login logic here
-        const result = await login(email, password, role);
-  
-        if (!result.success) {
-          setError(result.message);
-          setLoading(false);
-        }
+        result = await login(email, password, role);
       }
-  
+
+      if (!result.success) {
+        setError(result.message);
+      }
     } catch (err) {
-      setError(err.message || "Server error. Please try again.");
+      setError("An unexpected error occurred.");
+    } finally {
       setLoading(false);
     }
   };

@@ -15,7 +15,7 @@ class User(AbstractUser):
 
 class Dataset(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    original_data = models.JSONField()
+    file_hash = models.CharField(max_length=64, null=True, blank=True)
     cleaned_data = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
 
