@@ -10,8 +10,7 @@ import { Input } from '../components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 
 const AuthPage = () => {
-  // const { login, register } = useAuth();
-  const { login } = useAuth();
+  const { login, register } = useAuth();
   const [role, setRole] = useState('student');
   const [isRegister, setIsRegister] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -45,13 +44,15 @@ const AuthPage = () => {
     // }
     try {
       if (isRegister && role === 'student') {
+        console.log("Sending register:", { fullName, email, password });
         const response = await fetch("http://127.0.0.1:8080/api/register/", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            username: fullName,   // sending fullName as username
+            // username: fullName,   // sending fullName as username
+            username: fullName.replace(/\s+/g, "_").toLowerCase(),
             email: email,
             password: password
           })
@@ -60,23 +61,72 @@ const AuthPage = () => {
         const data = await response.json();
   
         if (!response.ok) {
-          setError(data.message || "Registration failed");
+          // setError(data.message || "Registration failed");
+          setError(
+            data.error ||
+            JSON.stringify(data.errors) ||
+            data.detail ||
+            "Registration failed"
+          );
           setLoading(false);
           return;
         }
   
         // success
         console.log("Registered:", data);
+        register(fullName, email, password);
         setLoading(false);
+        
+      } 
+      // else {
+      //   // keep your login logic here
+      //   const result = await login(email, password, role);
   
-      } else {
-        // keep your login logic here
-        const result = await login(email, password, role);
-  
-        if (!result.success) {
-          setError(result.message);
+      //   if (!result.success) {
+      //     setError(result.message);
+      //     setLoading(false);
+      //   }
+      // }
+      else {
+        console.log("Sending login:", { email, password });
+        const response = await fetch("http://127.0.0.1:8080/api/login/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email: email,
+            password: password
+          })
+        });
+
+        // const data = await response.json();
+
+        // if (!response.ok) {
+        //   setError(data.message || "Login failed");
+        //   setLoading(false);
+        //   return;
+        // }
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          setError(
+            data.error ||
+            data.detail ||
+            JSON.stringify(data.errors) ||
+            "Server error"
+          );
           setLoading(false);
+          return;
         }
+
+        // store tokens
+        localStorage.setItem("access", data.access);
+        localStorage.setItem("refresh", data.refresh);
+        login(email, password, role);
+        console.log("Login successful:", data);
+
+        setLoading(false);
       }
   
     } catch (err) {

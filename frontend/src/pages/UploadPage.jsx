@@ -48,7 +48,7 @@ const UploadPage = () => {
 
   const handleProcess = async () => {
     if (!file) return;
-
+    
     try {
       const reader = new FileReader();
 
@@ -89,13 +89,13 @@ const UploadPage = () => {
           return;
         }
 
-        const cleaned = result.cleaned_data;
+        const cleaned = result.cleaned_data || [];
 
         // Update table
         setTableData(cleaned);
 
         // Create table columns automatically
-        const cols = Object.keys(cleaned[0]).map((key) => ({
+        const cols = Object.keys(cleaned[0] || {}).map((key) => ({
           header: key.toUpperCase(),
           accessorKey: key
         }));

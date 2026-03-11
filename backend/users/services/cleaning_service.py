@@ -40,7 +40,8 @@ def clean_dataset(data):
 
         # Convert date columns
         if 'start_date' in df.columns:
-            df['start_date'] = pd.to_datetime(df['start_date'], errors='coerce')
+            # df['start_date'] = pd.to_datetime(df['start_date'], errors='coerce')
+            df['startdate'] = pd.to_datetime(df['startdate'], errors='coerce', infer_datetime_format=True)
             df = df[df['start_date'].notna()]
 
         # Email validation
@@ -117,7 +118,8 @@ def clean_dataset(data):
 
         # Remove low variation responses
         df['response_variation'] = df[likert_cols].std(axis=1)
-        df = df[df['response_variation'] >= 0.2]
+        # df = df[df['response_variation'] >= 0.2]
+        df = df[df['response_variation'].notna()]
         df = df.drop(columns=['response_variation'])
 
     # Convert cleaned DataFrame back to list of dicts

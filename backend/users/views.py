@@ -21,9 +21,27 @@ User = get_user_model()
 #     return serializer.errors
 
 # 1️⃣ Register View
-class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = RegisterSerializer
+# class RegisterView(generics.CreateAPIView):
+#     queryset = User.objects.all()
+#     serializer_class = RegisterSerializer
+class RegisterView(APIView):
+
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+
+        if serializer.is_valid():
+            user = serializer.save()
+
+            return Response({
+                "success": True,
+                "message": "User registered successfully",
+                "user": UserSerializer(user).data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "success": False,
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 # 2️⃣ Get Logged-in User Profile
