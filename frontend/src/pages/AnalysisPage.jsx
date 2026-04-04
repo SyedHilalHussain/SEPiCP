@@ -20,23 +20,147 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../components/ui/badge';
 import { useAuth } from '../context/AuthContext';
 
+
 const AnalysisPage = () => {
   const { user, logActivity } = useAuth();
   const [dataset] = useState('Fall_2023_Survey_Results.xlsx');
-  const [xAxis, setXAxis] = useState('');
+  const [xAxis, setXAxis] = useState([]);
   const [yAxis, setYAxis] = useState('');
   const [chartType, setChartType] = useState('bar');
   const [loading, setLoading] = useState(true);
+  const [datasets, setDatasets] = useState([]);
+
+  const [step, setStep] = useState(1);
+  const [selectedDataset, setSelectedDataset] = useState("");
+  const [columns, setColumns] = useState([]);
+
+  const [result, setResult] = useState(null);
+
   const navigate = useNavigate();
 
+  // React.useEffect(() => {
+  //   const timer = setTimeout(() => setLoading(false), 2000);
+  //   return () => clearTimeout(timer);
+  // }, []);
   React.useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 2000);
+
+    const fetchDatasets = async () => {
+      try {
+        const response = await fetch(
+          "http://127.0.0.1:8080/api/datasets/",
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("access")}`
+            }
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error("Failed to fetch datasets", data);
+          return;
+        }
+
+        const sorted = data.sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        );
+
+        setDatasets(sorted.slice(0, 5));
+      } catch (err) {
+        console.error("Error:", err);
+      }
+    };
+
+    fetchDatasets();
+
     return () => clearTimeout(timer);
   }, []);
 
-  const handleRun = () => {
-    logActivity('analysis', `Ran visualization on ${dataset}`);
-    navigate('/results');
+  React.useEffect(() => {
+  setXAxis([]);
+  setYAxis("");
+  setColumns([]); 
+}, [selectedDataset]);
+
+React.useEffect(() => {
+  if (!selectedDataset) return;
+
+  const selected = datasets.find(
+    (d) => d.id.toString() === selectedDataset
+  );
+
+  if (selected && selected.cleaned_data && selected.cleaned_data.length > 0) {
+    const cols = Object.keys(selected.cleaned_data[0]);
+    setColumns(cols);
+  } else {
+    setColumns([]);
+  }
+}, [selectedDataset, datasets]);
+
+  // const handleRun = () => {
+  //   if (step !== 2) return;
+  //   logActivity('analysis', `Ran visualization on ${dataset}`);
+  //   navigate('/results');
+  // };
+  const handleRun = async () => {
+    if (step !== 2) return;
+
+    // ✅ Find selected dataset
+    const selected = datasets.find(
+      (d) => d.id.toString() === selectedDataset
+    );
+
+    if (!selected || !selected.cleaned_data) {
+      console.error("No dataset found");
+      return;
+    }
+
+    // ✅ Prepare payload
+    const payload = {
+      independent_vars: xAxis,
+      dependent_var: yAxis,
+      data: selected.cleaned_data, // 🔥 FULL DATA
+    };
+
+    console.log("Sending to backend:", payload);
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8080/api/analysis/regression/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("access")}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Backend error:", data);
+        return;
+      }
+
+      // ✅ SUCCESS RESPONSE
+      console.log("Backend response:", result);
+
+      logActivity(
+        "analysis",
+        `Ran regression with X: ${xAxis.join(", ")} and Y: ${yAxis}`
+      );
+
+      // navigate("/results");
+      setResult(data); // store backend response
+
+    } catch (error) {
+      console.error("Request failed:", error);
+    }
   };
 
   return (
@@ -76,45 +200,113 @@ const AnalysisPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 sm:p-8 space-y-6">
+              {step === 1 && (
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 ml-0.5">Independent Variable (X-Axis)</label>
-                <Select value={xAxis} onValueChange={setXAxis}>
+                <label className="text-xs font-bold text-slate-700 ml-0.5">Datasets</label>
+                <Select defaultValue="none" value={selectedDataset} onValueChange={setSelectedDataset}>
                   <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
-                    <SelectValue placeholder="Select variable..." />
+                    <SelectValue placeholder="None" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl border-slate-100">
-                    <SelectItem value="age" className="rounded-lg font-bold text-xs">Age Group</SelectItem>
-                    <SelectItem value="gpa" className="rounded-lg font-bold text-xs">GPA Index</SelectItem>
+                    {datasets.length === 0 ? (
+                      <SelectItem value="none" className="rounded-lg font-bold text-xs">
+                        No datasets
+                      </SelectItem>
+                    ) : (
+                      datasets.map((item, index) => (
+                        <SelectItem
+                          key={item.id}
+                          value={item.id.toString()}
+                          className="rounded-lg font-bold text-xs"
+                        >
+                          Dataset {index + 1}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
+
+                <button onClick={() => {
+                  if (!selectedDataset) {
+                    alert("Please select dataset");
+                    return;
+                  }
+                  setStep(2);
+                }} 
+                className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center gap-2">
+                Next
+              </button>
+
+              </div>
+              )}
+              
+              {step === 2 && (
+                <div className='flex flex-col gap-4'>
+                <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 ml-0.5">Independent Variable (X-Axis)</label>
+                <Select
+                  onValueChange={(col) => {
+                    setXAxis((prev) =>
+                      prev.includes(col)
+                        ? prev.filter((item) => item !== col)
+                        : [...prev, col]
+                    );
+                  }}
+                >
+                <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
+                  <SelectValue
+                    placeholder={
+                      xAxis.length > 0
+                        ? xAxis.join(", ")
+                        : "Select variables..."
+                    }
+                  />
+                </SelectTrigger>
+
+                <SelectContent className="rounded-xl border-slate-100 max-h-52 overflow-y-auto">
+                  {columns.map((col, index) => (
+                    <SelectItem key={index} value={col} className="rounded-lg font-bold text-xs flex justify-between">
+                      {col} {xAxis.includes(col) && "✓"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
                 <p className="text-[10px] text-slate-400 font-medium ml-0.5 uppercase tracking-wide">Categorical or continuous variable.</p>
               </div>
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700 ml-0.5">Dependent Variable (Y-Axis)</label>
-                <Select value={yAxis} onValueChange={setYAxis}>
+                <Select value={yAxis} onValueChange={setYAxis} disabled={xAxis.length === 0}>
                   <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
                     <SelectValue placeholder="Select outcome..." />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl border-slate-100">
-                    <SelectItem value="score" className="rounded-lg font-bold text-xs">Performance Score</SelectItem>
-                    <SelectItem value="satisfaction" className="rounded-lg font-bold text-xs">Student Satisfaction</SelectItem>
+
+                  <SelectContent className="rounded-xl border-slate-100 max-h-52 overflow-y-auto">
+                    {columns
+                      .filter((col) => !xAxis.includes(col))
+                      .map((col, index) => (
+                        <SelectItem key={index} value={col} className="rounded-lg font-bold text-xs">
+                          {col}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 ml-0.5">Group By (Optional)</label>
-                <Select defaultValue="none">
-                  <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-slate-100">
-                    <SelectItem value="none" className="rounded-lg font-bold text-xs">None</SelectItem>
-                    <SelectItem value="dept" className="rounded-lg font-bold text-xs">Department</SelectItem>
-                  </SelectContent>
-                </Select>
+              <button onClick={() => {
+                  setStep(1);
+
+                  // 🔥 CLEAR OLD VARIABLES
+                  setXAxis("");
+                  setYAxis("");
+                }} 
+                className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center gap-2">
+                Back
+              </button>
+              
               </div>
+              )}
+
             </CardContent>
           </Card>
 
@@ -189,6 +381,63 @@ const AnalysisPage = () => {
               </div>
             )}
 
+            {!loading && result && (
+              <div className="relative z-10 w-full h-full overflow-y-auto p-6 space-y-6">
+
+                {/* 🔥 METRICS */}
+                <div className="bg-white rounded-xl p-4 shadow">
+                  <h3 className="font-bold text-sm mb-2">Model Metrics</h3>
+                  <p className="text-xs">R²: {result.metrics?.r2}</p>
+                  <p className="text-xs">RMSE: {result.metrics?.rmse}</p>
+                  <p className="text-xs">Intercept: {result.intercept}</p>
+                </div>
+
+                {/* 🔥 COEFFICIENTS */}
+                <div className="bg-white rounded-xl p-4 shadow">
+                  <h3 className="font-bold text-sm mb-2">Coefficients</h3>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left">
+                        <th>Feature</th>
+                        <th>Coefficient</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.coefficients?.map((item, index) => (
+                        <tr key={index}>
+                          <td>{item.feature}</td>
+                          <td>{item.coefficient.toFixed(4)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 🔥 PLOTS */}
+                <div className="bg-white rounded-xl p-4 shadow">
+                  <h3 className="font-bold text-sm mb-2">Plots</h3>
+                  <div className="grid grid-cols-1 gap-4">
+                    {result.plots?.map((img, index) => (
+                      <img
+                        key={index}
+                        src={img} // ✅ already base64
+                        alt={`plot-${index}`}
+                        className="w-full rounded-lg border"
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* 🔥 PREDICTIONS (OPTIONAL) */}
+                <div className="bg-white rounded-xl p-4 shadow">
+                  <h3 className="font-bold text-sm mb-2">Predictions Sample</h3>
+                  <pre className="text-[10px] overflow-x-auto">
+                    {JSON.stringify(result.predictions_sample, null, 2)}
+                  </pre>
+                </div>
+
+              </div>
+            )}
             {/* Bottom Controls as seen in image */}
             <div className="absolute bottom-10 flex gap-6 sm:gap-12 opacity-30 grayscale scale-75 sm:scale-90 pointer-events-none">
               <div className="w-20 sm:w-32 h-4 sm:h-6 bg-slate-200 rounded-full"></div>

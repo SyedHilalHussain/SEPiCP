@@ -7,6 +7,9 @@ from .views import (
     AdminUserListView,
     AdminDashboardView,
     UploadDatasetView,
+    MultipleLinearRegressionView,
+    PCAAnalysisView,
+    UserDatasetListView,
 )
 
 urlpatterns = [
@@ -19,7 +22,14 @@ urlpatterns = [
     path("profile/", ProfileView.as_view()),
     path("datasets/upload/", UploadDatasetView.as_view()),
 
+    # Analysis
+    path("analysis/regression/", MultipleLinearRegressionView.as_view()),
+    path("analysis/pca/", PCAAnalysisView.as_view()),
+
     # Admin-only
     path("admin/users/", AdminUserListView.as_view()),
     path("admin/dashboard/", AdminDashboardView.as_view()),
+
+    # Datasets List
+    path("datasets/", UserDatasetListView.as_view()),
 ]

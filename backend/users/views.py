@@ -9,6 +9,9 @@ from .models import Dataset
 from .serializers import RegisterSerializer, UserSerializer, DatasetSerializer      
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from .services.cleaning_service import clean_dataset
+from .services.analysis.regression_service import perform_regression_analysis
+from .services.analysis.pca_service import perform_pca_analysis
+from .models import AnalysisResult
 
 User = get_user_model()
 
@@ -122,4 +125,78 @@ class UserDatasetListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Dataset.objects.filter(user=self.request.user)
+        return Dataset.objects.filter(
+            user=self.request.user
+        ).order_by('-created_at')
+
+class MultipleLinearRegressionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        independent_vars = request.data.get("independent_vars")
+        dependent_var = request.data.get("dependent_var")
+        data = request.data.get("data")
+        missing_values = request.data.get("missing_values", "drop")
+
+        if not all([independent_vars, dependent_var, data]):
+            return Response({"error": "Missing required parameters: independent_vars, dependent_var, and data"}, 
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            results = perform_regression_analysis(independent_vars, dependent_var, data, missing_values)
+            
+            # Store in database
+            AnalysisResult.objects.create(
+                user=request.user,
+                analysis_type='regression',
+                input_params={
+                    "independent_vars": independent_vars,
+                    "dependent_var": dependent_var,
+                    "missing_values": missing_values
+                },
+                output_results=results
+            )
+
+            return Response(results, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class PCAAnalysisView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data.get("data")
+        selected_columns = request.data.get("selected_columns")
+        n_components = request.data.get("n_components")
+        variance_threshold = request.data.get("variance_threshold")
+        missing_values = request.data.get("missing_values", "drop")
+
+        if not all([data, selected_columns]):
+            return Response({"error": "Missing required parameters: data and selected_columns"}, 
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            results = perform_pca_analysis(
+                data, 
+                selected_columns, 
+                n_components=n_components, 
+                variance_threshold=variance_threshold, 
+                missing_values=missing_values
+            )
+
+            # Store in database
+            AnalysisResult.objects.create(
+                user=request.user,
+                analysis_type='pca',
+                input_params={
+                    "selected_columns": selected_columns,
+                    "n_components": n_components,
+                    "variance_threshold": variance_threshold,
+                    "missing_values": missing_values
+                },
+                output_results=results
+            )
+
+            return Response(results, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

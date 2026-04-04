@@ -24,3 +24,18 @@ class Dataset(models.Model):
         
     def __str__(self):
         return f"Dataset {self.id} by {self.user.email}"
+    
+
+class AnalysisResult(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    dataset = models.ForeignKey(Dataset, on_delete=models.SET_NULL, null=True, blank=True)
+    analysis_type = models.CharField(max_length=50) # 'regression' or 'pca'
+    input_params = models.JSONField()
+    output_results = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "analysis_results"
+        
+    def __str__(self):
+        return f"{self.analysis_type} result for {self.user.email} at {self.created_at}"
