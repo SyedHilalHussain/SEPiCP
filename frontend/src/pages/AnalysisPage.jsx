@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Database,
   Settings2,
@@ -8,34 +8,47 @@ import {
   Zap,
   Info,
   Loader2,
-  History
-} from 'lucide-react';
-import { cn } from '../lib/utils';
-import { Switch } from '../components/ui/switch';
-import { motion, AnimatePresence } from 'framer-motion';
-import { theme } from '../styles/theme';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Badge } from '../components/ui/badge';
-import { useAuth } from '../context/AuthContext';
-
+  History,
+} from "lucide-react";
+import { cn } from "../lib/utils";
+import { Switch } from "../components/ui/switch";
+import { motion, AnimatePresence } from "framer-motion";
+import { theme } from "../styles/theme";
+import { Button } from "../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "../components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { Badge } from "../components/ui/badge";
+import { useAuth } from "../context/AuthContext";
 
 const AnalysisPage = () => {
   const { user, logActivity } = useAuth();
-  const [dataset] = useState('Fall_2023_Survey_Results.xlsx');
+  const [dataset] = useState("Fall_2023_Survey_Results.xlsx");
   const [xAxis, setXAxis] = useState([]);
-  const [yAxis, setYAxis] = useState('');
-  const [chartType, setChartType] = useState('bar');
+  const [yAxis, setYAxis] = useState("");
+  const [chartType, setChartType] = useState("bar");
   const [loading, setLoading] = useState(true);
   const [datasets, setDatasets] = useState([]);
 
   const [step, setStep] = useState(1);
   const [selectedDataset, setSelectedDataset] = useState("");
   const [columns, setColumns] = useState([]);
+  const [numericColumns, setNumericColumns] = useState([]);
+  const [variance, setVariance] = useState(95);
 
   const [result, setResult] = useState(null);
-
+  const [analysisType, setAnalysisType] = useState("");
   const navigate = useNavigate();
 
   // React.useEffect(() => {
@@ -47,15 +60,12 @@ const AnalysisPage = () => {
 
     const fetchDatasets = async () => {
       try {
-        const response = await fetch(
-          "http://127.0.0.1:8080/api/datasets/",
-          {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("access")}`
-            }
-          }
-        );
+        const response = await fetch("http://127.0.0.1:8080/api/datasets/", {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("access")}`,
+          },
+        });
 
         const data = await response.json();
 
@@ -65,7 +75,7 @@ const AnalysisPage = () => {
         }
 
         const sorted = data.sort(
-          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+          (a, b) => new Date(b.created_at) - new Date(a.created_at),
         );
 
         setDatasets(sorted.slice(0, 5));
@@ -80,86 +90,97 @@ const AnalysisPage = () => {
   }, []);
 
   React.useEffect(() => {
-  setXAxis([]);
-  setYAxis("");
-  setColumns([]); 
-}, [selectedDataset]);
-
-React.useEffect(() => {
-  if (!selectedDataset) return;
-
-  const selected = datasets.find(
-    (d) => d.id.toString() === selectedDataset
-  );
-
-  if (selected && selected.cleaned_data && selected.cleaned_data.length > 0) {
-    const cols = Object.keys(selected.cleaned_data[0]);
-    setColumns(cols);
-  } else {
+    setXAxis([]);
+    setYAxis("");
     setColumns([]);
-  }
-}, [selectedDataset, datasets]);
+  }, [selectedDataset]);
 
+  React.useEffect(() => {
+    if (!selectedDataset) return;
+
+    const selected = datasets.find((d) => d.id.toString() === selectedDataset);
+
+    if (selected && selected.cleaned_data && selected.cleaned_data.length > 0) {
+      const cols = Object.keys(selected.cleaned_data[0]);
+      setColumns(cols);
+    } else {
+      setColumns([]);
+    }
+  }, [selectedDataset, datasets]);
+
+  React.useEffect(() => {
+    if (!selectedDataset) return;
+
+    const selected = datasets.find((d) => d.id.toString() === selectedDataset);
+
+    if (selected && selected.cleaned_data?.length > 0) {
+      const data = selected.cleaned_data;
+
+      const cols = Object.keys(data[0]);
+
+      const numericCols = cols.filter((col) => {
+        const validValues = data
+          .map((row) => row[col])
+          .filter((val) => val !== null && val !== "");
+
+        const numericCount = validValues.filter(
+          (val) => !isNaN(Number(val)),
+        ).length;
+
+        return numericCount / validValues.length > 0.8; // 80% numeric
+      });
+
+      setColumns(cols);
+      setNumericColumns(numericCols);
+    }
+  }, [selectedDataset, datasets]);
   // const handleRun = () => {
   //   if (step !== 2) return;
   //   logActivity('analysis', `Ran visualization on ${dataset}`);
   //   navigate('/results');
   // };
   const handleRun = async () => {
-    if (step !== 2) return;
+    const selected = datasets.find((d) => d.id.toString() === selectedDataset);
 
-    // ✅ Find selected dataset
-    const selected = datasets.find(
-      (d) => d.id.toString() === selectedDataset
-    );
+    if (!selected) return;
 
-    if (!selected || !selected.cleaned_data) {
-      console.error("No dataset found");
-      return;
+    let url = "";
+    let payload = {};
+
+    if (analysisType === "regression") {
+      url = "http://127.0.0.1:8080/api/analysis/regression/";
+
+      payload = {
+        independent_vars: xAxis,
+        dependent_var: yAxis,
+        data: selected.cleaned_data,
+      };
     }
 
-    // ✅ Prepare payload
-    const payload = {
-      independent_vars: xAxis,
-      dependent_var: yAxis,
-      data: selected.cleaned_data, // 🔥 FULL DATA
-    };
+    if (analysisType === "pca") {
+      url = "http://127.0.0.1:8080/api/analysis/pca/";
 
-    console.log("Sending to backend:", payload);
+      payload = {
+        selected_columns: xAxis,
+        variance_threshold: variance,
+        data: selected.cleaned_data,
+      };
+    }
 
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8080/api/analysis/regression/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("access")}`,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("access")}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        console.error("Backend error:", data);
-        return;
-      }
-
-      // ✅ SUCCESS RESPONSE
-      console.log("Backend response:", result);
-
-      logActivity(
-        "analysis",
-        `Ran regression with X: ${xAxis.join(", ")} and Y: ${yAxis}`
-      );
-
-      // navigate("/results");
-      setResult(data); // store backend response
-
-    } catch (error) {
-      console.error("Request failed:", error);
+      setResult(data);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -168,14 +189,21 @@ React.useEffect(() => {
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">Analysis Configuration</h1>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+            Analysis Configuration
+          </h1>
           <p className="text-slate-500 mt-1.5 text-xs sm:text-sm font-medium">
             Configure parameters for your dataset analysis. Active session:
-            <span className="text-[#1e3a8a] font-bold underline cursor-pointer ml-1">{dataset}</span>
+            <span className="text-[#1e3a8a] font-bold underline cursor-pointer ml-1">
+              {dataset}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="h-11 px-6 rounded-xl font-bold border-slate-200 bg-white text-slate-600 shadow-sm flex items-center gap-2 text-xs">
+          <Button
+            variant="outline"
+            className="h-11 px-6 rounded-xl font-bold border-slate-200 bg-white text-slate-600 shadow-sm flex items-center gap-2 text-xs"
+          >
             <History className="w-4 h-4 text-slate-400" />
             History
           </Button>
@@ -201,112 +229,273 @@ React.useEffect(() => {
             </CardHeader>
             <CardContent className="p-6 sm:p-8 space-y-6">
               {step === 1 && (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 ml-0.5">Datasets</label>
-                <Select defaultValue="none" value={selectedDataset} onValueChange={setSelectedDataset}>
-                  <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-slate-100">
-                    {datasets.length === 0 ? (
-                      <SelectItem value="none" className="rounded-lg font-bold text-xs">
-                        No datasets
-                      </SelectItem>
-                    ) : (
-                      datasets.map((item, index) => (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 ml-0.5">
+                    Datasets
+                  </label>
+                  <Select
+                    defaultValue="none"
+                    value={selectedDataset}
+                    onValueChange={setSelectedDataset}
+                  >
+                    <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
+                      <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-slate-100">
+                      {datasets.length === 0 ? (
                         <SelectItem
-                          key={item.id}
-                          value={item.id.toString()}
+                          value="none"
                           className="rounded-lg font-bold text-xs"
                         >
-                          Dataset {index + 1}
+                          No datasets
                         </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                      ) : (
+                        datasets.map((item, index) => (
+                          <SelectItem
+                            key={item.id}
+                            value={item.id.toString()}
+                            className="rounded-lg font-bold text-xs"
+                          >
+                            Dataset {index + 1}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
 
-                <button onClick={() => {
-                  if (!selectedDataset) {
-                    alert("Please select dataset");
-                    return;
-                  }
-                  setStep(2);
-                }} 
-                className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center gap-2">
-                Next
-              </button>
-
-              </div>
+                  <button
+                    onClick={() => {
+                      if (!selectedDataset) {
+                        alert("Please select dataset");
+                        return;
+                      }
+                      setStep(2);
+                    }}
+                    className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center gap-2"
+                  >
+                    Next
+                  </button>
+                </div>
               )}
-              
               {step === 2 && (
-                <div className='flex flex-col gap-4'>
-                <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 ml-0.5">Independent Variable (X-Axis)</label>
-                <Select
-                  onValueChange={(col) => {
-                    setXAxis((prev) =>
-                      prev.includes(col)
-                        ? prev.filter((item) => item !== col)
-                        : [...prev, col]
-                    );
-                  }}
-                >
-                <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
-                  <SelectValue
-                    placeholder={
-                      xAxis.length > 0
-                        ? xAxis.join(", ")
-                        : "Select variables..."
-                    }
-                  />
-                </SelectTrigger>
+                <div className="space-y-4">
+                  <label className="text-xs font-bold text-slate-700 ml-0.5">
+                    Analysis Type
+                  </label>
 
-                <SelectContent className="rounded-xl border-slate-100 max-h-52 overflow-y-auto">
-                  {columns.map((col, index) => (
-                    <SelectItem key={index} value={col} className="rounded-lg font-bold text-xs flex justify-between">
-                      {col} {xAxis.includes(col) && "✓"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-                <p className="text-[10px] text-slate-400 font-medium ml-0.5 uppercase tracking-wide">Categorical or continuous variable.</p>
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { id: "regression", label: "Regression" },
+                      { id: "pca", label: "PCA" },
+                    ].map((type) => (
+                      <button
+                        key={type.id}
+                        onClick={() => setAnalysisType(type.id)}
+                        className={cn(
+                          "h-12 rounded-xl border text-xs font-black uppercase tracking-wider transition-all",
+                          analysisType === type.id
+                            ? "bg-[#1e3a8a] text-white shadow-lg"
+                            : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100",
+                        )}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 ml-0.5">Dependent Variable (Y-Axis)</label>
-                <Select value={yAxis} onValueChange={setYAxis} disabled={xAxis.length === 0}>
-                  <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
-                    <SelectValue placeholder="Select outcome..." />
-                  </SelectTrigger>
+                  <div className="flex justify-between gap-4">
+                    <button
+                      onClick={() => {
+                        setStep(1);
 
-                  <SelectContent className="rounded-xl border-slate-100 max-h-52 overflow-y-auto">
-                    {columns
-                      .filter((col) => !xAxis.includes(col))
-                      .map((col, index) => (
-                        <SelectItem key={index} value={col} className="rounded-lg font-bold text-xs">
-                          {col}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <button onClick={() => {
-                  setStep(1);
-
-                  // 🔥 CLEAR OLD VARIABLES
-                  setXAxis("");
-                  setYAxis("");
-                }} 
-                className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center gap-2">
-                Back
-              </button>
-              
-              </div>
+                        setAnalysisType("");
+                      }}
+                      className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center gap-2"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!analysisType) {
+                          alert("Please select analysis type");
+                          return;
+                        }
+                        setStep(3);
+                      }}
+                      className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg hover:bg-[#1a337a]"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               )}
 
+              {step === 3 && analysisType === "regression" && (
+                <div className="flex flex-col gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 ml-0.5">
+                      Independent Variable (X-Axis)
+                    </label>
+                    <Select
+                      onValueChange={(col) => {
+                        setXAxis((prev) =>
+                          prev.includes(col)
+                            ? prev.filter((item) => item !== col)
+                            : [...prev, col],
+                        );
+                      }}
+                    >
+                      <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
+                        <SelectValue
+                          placeholder={
+                            xAxis.length > 0
+                              ? xAxis.join(", ")
+                              : "Select variables..."
+                          }
+                        />
+                      </SelectTrigger>
+
+                      <SelectContent className="rounded-xl border-slate-100 max-h-52 overflow-y-auto">
+                        {columns.map((col, index) => (
+                          <SelectItem
+                            key={index}
+                            value={col}
+                            className="rounded-lg font-bold text-xs flex justify-between"
+                          >
+                            {col} {xAxis.includes(col) && "✓"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-slate-400 font-medium ml-0.5 uppercase tracking-wide">
+                      Categorical or continuous variable.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 ml-0.5">
+                      Dependent Variable (Y-Axis)
+                    </label>
+                    <Select
+                      value={yAxis}
+                      onValueChange={setYAxis}
+                      disabled={xAxis.length === 0}
+                    >
+                      <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
+                        <SelectValue placeholder="Select outcome..." />
+                      </SelectTrigger>
+
+                      <SelectContent className="rounded-xl border-slate-100 max-h-52 overflow-y-auto">
+                        {columns
+                          .filter((col) => !xAxis.includes(col))
+                          .map((col, index) => (
+                            <SelectItem
+                              key={index}
+                              value={col}
+                              className="rounded-lg font-bold text-xs"
+                            >
+                              {col}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setStep(2);
+
+                      setXAxis("");
+                      setYAxis("");
+                    }}
+                    className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center gap-2"
+                  >
+                    Back
+                  </button>
+                </div>
+              )}
+
+              {step === 3 && analysisType === "pca" && (
+                <div className="space-y-6">
+                  {/* Column Selection */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 ml-0.5">
+                      Select Columns (Features)
+                    </label>
+
+                    <Select
+                      onValueChange={(col) => {
+                        setXAxis((prev) =>
+                          prev.includes(col)
+                            ? prev.filter((c) => c !== col)
+                            : [...prev, col],
+                        );
+                      }}
+                    >
+                      <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl h-11 text-xs font-bold">
+                        <SelectValue
+                          placeholder={
+                            xAxis.length > 0
+                              ? xAxis.join(", ")
+                              : "Select features..."
+                          }
+                        />
+                      </SelectTrigger>
+
+                      <SelectContent className="rounded-xl border-slate-100 max-h-52 overflow-y-auto">
+                        {numericColumns.map((col) => (
+                          <SelectItem
+                            key={col}
+                            value={col}
+                            className="text-xs font-bold"
+                          >
+                            {col} {xAxis.includes(col) && "✓"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <p className="text-[10px] text-slate-400 font-medium uppercase">
+                      Select numeric columns only
+                    </p>
+                  </div>
+
+                  {/* Variance Threshold */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 ml-0.5">
+                      Variance Threshold (%)
+                    </label>
+
+                    <input
+                      type="number"
+                      value={variance}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+
+                        if (val >= 0 && val <= 100) {
+                          setVariance(val);
+                        }
+                      }}
+                      className="w-full h-11 px-4 rounded-xl border border-slate-200 text-xs font-bold"
+                    />
+
+                    <p className="text-[10px] text-slate-400 font-medium uppercase">
+                      Determines number of components retained
+                    </p>
+                  </div>
+
+                  {/* Back Button */}
+                  <button
+                    onClick={() => {
+                      setStep(2);
+                      setXAxis([]);
+                    }}
+                    className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg hover:bg-[#1a337a]"
+                  >
+                    Back
+                  </button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -320,9 +509,9 @@ React.useEffect(() => {
             <CardContent className="p-6 sm:p-8 space-y-8">
               <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100/50 rounded-2xl">
                 {[
-                  { id: 'bar', label: 'Bar', icon: BarChart3 },
-                  { id: 'line', label: 'Line', icon: Settings2 },
-                  { id: 'scatter', label: 'Scatter', icon: Database },
+                  { id: "bar", label: "Bar", icon: BarChart3 },
+                  { id: "line", label: "Line", icon: Settings2 },
+                  { id: "scatter", label: "Scatter", icon: Database },
                 ].map((type) => (
                   <button
                     key={type.id}
@@ -331,11 +520,13 @@ React.useEffect(() => {
                       "flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl transition-all",
                       chartType === type.id
                         ? "bg-white text-[#1e3a8a] shadow-sm font-black ring-1 ring-slate-200"
-                        : "text-slate-400 hover:text-slate-600 font-bold"
+                        : "text-slate-400 hover:text-slate-600 font-bold",
                     )}
                   >
                     <type.icon className="w-4.5 h-4.5" />
-                    <span className="text-[10px] uppercase tracking-widest">{type.label}</span>
+                    <span className="text-[10px] uppercase tracking-widest">
+                      {type.label}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -343,16 +534,27 @@ React.useEffect(() => {
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <p className="text-slate-900 text-[13px] font-black">Exclude Outliers</p>
-                    <p className="text-slate-400 text-[11px] font-bold">Remove values {'>'} 3 SD</p>
+                    <p className="text-slate-900 text-[13px] font-black">
+                      Exclude Outliers
+                    </p>
+                    <p className="text-slate-400 text-[11px] font-bold">
+                      Remove values {">"} 3 SD
+                    </p>
                   </div>
-                  <Switch defaultChecked className="data-[state=checked]:bg-[#1e3a8a] scale-90" />
+                  <Switch
+                    defaultChecked
+                    className="data-[state=checked]:bg-[#1e3a8a] scale-90"
+                  />
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <p className="text-slate-900 text-[13px] font-black">Show Confidence Int.</p>
-                    <p className="text-slate-400 text-[11px] font-bold">95% CI shading</p>
+                    <p className="text-slate-900 text-[13px] font-black">
+                      Show Confidence Int.
+                    </p>
+                    <p className="text-slate-400 text-[11px] font-bold">
+                      95% CI shading
+                    </p>
                   </div>
                   <Switch className="data-[state=checked]:bg-[#1e3a8a] scale-90" />
                 </div>
@@ -367,7 +569,11 @@ React.useEffect(() => {
             {/* Visualizer Background Placeholder */}
             <div className="absolute inset-10 sm:inset-20 opacity-10 pointer-events-none grayscale flex items-end gap-6 sm:gap-10">
               {[4, 5, 8, 4, 10, 6].map((h, i) => (
-                <div key={i} className="flex-1 rounded-t-xl sm:rounded-t-2xl bg-slate-300" style={{ height: `${h * 10}%` }}></div>
+                <div
+                  key={i}
+                  className="flex-1 rounded-t-xl sm:rounded-t-2xl bg-slate-300"
+                  style={{ height: `${h * 10}%` }}
+                ></div>
               ))}
             </div>
 
@@ -375,15 +581,18 @@ React.useEffect(() => {
               <div className="relative z-10 flex flex-col items-center gap-4 sm:gap-6 p-8 sm:p-12 bg-white rounded-[32px] shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-500 mx-4">
                 <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-4 border-slate-100 border-t-[#1e3a8a] animate-spin"></div>
                 <div>
-                  <p className="text-xl sm:text-2xl font-black text-slate-900">Generating Preview</p>
-                  <p className="text-[12px] font-bold text-slate-400 mt-1 sm:mt-2">Processing 1,240 rows...</p>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900">
+                    Generating Preview
+                  </p>
+                  <p className="text-[12px] font-bold text-slate-400 mt-1 sm:mt-2">
+                    Processing 1,240 rows...
+                  </p>
                 </div>
               </div>
             )}
 
-            {!loading && result && (
+            {!loading && result && analysisType === "regression" && (
               <div className="relative z-10 w-full h-full overflow-y-auto p-6 space-y-6">
-
                 {/* 🔥 METRICS */}
                 <div className="bg-white rounded-xl p-4 shadow">
                   <h3 className="font-bold text-sm mb-2">Model Metrics</h3>
@@ -435,9 +644,73 @@ React.useEffect(() => {
                     {JSON.stringify(result.predictions_sample, null, 2)}
                   </pre>
                 </div>
-
               </div>
             )}
+
+            {!loading && result && analysisType === "pca" && (
+              <div className="relative z-10 w-full h-full overflow-y-auto p-6 space-y-6">
+                {/* 🔥 SUMMARY */}
+                <div className="bg-white rounded-xl p-4 shadow">
+                  <h3 className="font-bold text-sm mb-2">Summary</h3>
+                  <p className="text-xs">
+                    Total Features: {result.summary?.total_features}
+                  </p>
+                  <p className="text-xs">
+                    Components Selected: {result.summary?.components_selected}
+                  </p>
+                  <p className="text-xs">
+                    Total Variance: {result.summary?.total_variance}%
+                  </p>
+                </div>
+
+                {/* 🔥 VARIANCE EXPLAINED */}
+                <div className="bg-white rounded-xl p-4 shadow">
+                  <h3 className="font-bold text-sm mb-2">Variance Explained</h3>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr>
+                        <th>Component</th>
+                        <th>Variance %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.variance_explained?.map((v, i) => (
+                        <tr key={i}>
+                          <td>{v.component_num}</td>
+                          <td>{v.variance_percent}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 🔥 SCREE PLOT */}
+                <div className="bg-white rounded-xl p-4 shadow">
+                  <h3 className="font-bold text-sm mb-2">Scree Plot</h3>
+                  <img
+                    src={result.scree_plot}
+                    className="w-full rounded-lg border"
+                  />
+                </div>
+
+                {/* 🔥 PCA PLOTS */}
+                <div className="bg-white rounded-xl p-4 shadow">
+                  <h3 className="font-bold text-sm mb-2">PCA Visualizations</h3>
+                  <div className="space-y-4">
+                    {result.plots?.map((plot, index) => (
+                      <div key={index}>
+                        <p className="text-xs font-bold mb-1">{plot.title}</p>
+                        <img
+                          src={plot.image}
+                          className="w-full rounded-lg border"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Bottom Controls as seen in image */}
             <div className="absolute bottom-10 flex gap-6 sm:gap-12 opacity-30 grayscale scale-75 sm:scale-90 pointer-events-none">
               <div className="w-20 sm:w-32 h-4 sm:h-6 bg-slate-200 rounded-full"></div>
@@ -457,4 +730,3 @@ React.useEffect(() => {
 };
 
 export default AnalysisPage;
-
