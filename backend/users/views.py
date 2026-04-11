@@ -76,34 +76,35 @@ class AdminDashboardView(APIView):
             "admin_users": admin_users,
         })
 
+import pandas as pd
+import json
+
 class UploadDatasetView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
 
-        # # If frontend sends raw list directly
-        # if isinstance(request.data, list):
-        #     original_data = request.data
+        file = request.FILES.get("file")
 
-        # If frontend sends {"data": [...]}
-        if isinstance(request.data, dict):
-            original_data = request.data.get("data")
-        else:
+        if not file:
             return Response(
-                {"error": "Invalid data format"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Check if data exists
-        if not original_data:
-            return Response(
-                {"error": "No data provided"},
+                {"error": "No file uploaded"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            cleaned_data = clean_dataset(original_data)
+            # 🔥 Read Excel file
+            df = pd.read_excel(file)
 
+            # Convert to list of dicts (raw data)
+            # original_data = df.to_dict(orient='records')
+            original_data = json.loads(df.to_json(orient='records', date_format='iso'))
+
+            # Clean data
+            # cleaned_data = clean_dataset(original_data)
+            cleaned_data = json.loads(df.to_json(orient='records', date_format='iso'))
+
+            # Save to DB
             dataset = Dataset.objects.create(
                 user=request.user,
                 original_data=original_data,
@@ -119,7 +120,7 @@ class UploadDatasetView(APIView):
                 {"error": "Processing failed", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
+        
 class UserDatasetListView(generics.ListAPIView):
     serializer_class = DatasetSerializer
     permission_classes = [IsAuthenticated]

@@ -168,7 +168,10 @@ import re
 
 def clean_dataset(data):
     df = pd.DataFrame(data)
-
+    print("Initial DataFrame:")
+    print(type(data))
+    print(data[:2])
+    print("-----------------------")
     # Detect survey type
     if 'Total Engage Score-P' in df.columns or 'Content-P_1' in df.columns:
         survey_type = 'instructor'
@@ -282,11 +285,6 @@ def clean_dataset(data):
         df['q2'] = df['q2'].replace(uni_map)
         df['q2'] = df['q2'].str.title()
     
-
-
-
-
-
 # Identify Likert columns
         likert_cols = [col for col in df.columns
                if col.startswith((
@@ -324,7 +322,9 @@ def clean_dataset(data):
         df = df.drop(columns=['response_variation'])
  
         df = df.astype(str)
+        print("Cleaned DataFrame:")
         print(df.head())
+        print("-----------------------")
     return json.loads(df.to_json(orient='records', date_format='iso'))
     # return df.to_dict(orient='records')
 

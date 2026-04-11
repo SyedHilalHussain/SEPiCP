@@ -46,70 +46,49 @@ const UploadPage = () => {
     multiple: false
   });
 
-  const handleProcess = async () => {
-    if (!file) return;
-    
-    try {
-      const reader = new FileReader();
+ const handleProcess = async () => {
+  if (!file) return;
 
-      reader.onload = async (e) => {
-        const data = new Uint8Array(e.target.result);
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    console.log("Uploading file:", file.name, "Size:", file.size);
+    const response = await fetch(
+      "http://127.0.0.1:8080/api/datasets/upload/",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access")}`,
+        },
+        body: formData, // ❗ no JSON
+      }
+    );
 
-        const workbook = XLSX.read(data, { type: "array" });
+    const result = await response.json();
+    console.log("Backend response:", result);
 
-        const sheetName = workbook.SheetNames[0];
-
-        const worksheet = workbook.Sheets[sheetName];
-
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-        console.log("Converted Excel → JSON:", jsonData);
-
-        // Send to backend
-        const response = await fetch(
-          "http://127.0.0.1:8080/api/datasets/upload/",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("access")}`
-            },
-            body: JSON.stringify({
-              data: jsonData
-            })
-          }
-        );
-
-        const result = await response.json();
-
-        console.log("Cleaned data from backend:", result);
-
-        if (!response.ok) {
-          alert(result.error || "Upload failed");
-          return;
-        }
-
-        const cleaned = result.cleaned_data || [];
-
-        // Update table
-        setTableData(cleaned);
-
-        // Create table columns automatically
-        const cols = Object.keys(cleaned[0] || {}).map((key) => ({
-          header: key.toUpperCase(),
-          accessorKey: key
-        }));
-
-        setColumns(cols);
-
-        logActivity("upload", `Uploaded dataset: ${file.name}`);
-      };
-
-      reader.readAsArrayBuffer(file);
-    } catch (error) {
-      console.error(error);
+    if (!response.ok) {
+      alert(result.error || "Upload failed");
+      return;
     }
-  };
+
+    const cleaned = result.cleaned_data || [];
+
+    setTableData(cleaned);
+
+    const cols = Object.keys(cleaned[0] || {}).map((key) => ({
+      header: key.toUpperCase(),
+      accessorKey: key
+    }));
+
+    setColumns(cols);
+
+    logActivity("upload", `Uploaded dataset: ${file.name}`);
+
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
