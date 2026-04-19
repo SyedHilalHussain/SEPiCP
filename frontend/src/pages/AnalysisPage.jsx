@@ -148,6 +148,10 @@ const AnalysisPage = () => {
     let payload = {};
 
     if (analysisType === "regression") {
+      if (xAxis.length === 0 || !yAxis) {
+        alert("Select X and Y variables");
+        return;
+      }
       url = "http://127.0.0.1:8080/api/analysis/regression/";
 
       payload = {
@@ -158,6 +162,10 @@ const AnalysisPage = () => {
     }
 
     if (analysisType === "pca") {
+      if (xAxis.length === 0) {
+        alert("Select features");
+        return;
+      }
       url = "http://127.0.0.1:8080/api/analysis/pca/";
 
       payload = {
@@ -168,6 +176,7 @@ const AnalysisPage = () => {
     }
 
     try {
+      setLoading(true);
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -181,7 +190,9 @@ const AnalysisPage = () => {
       setResult(data);
     } catch (err) {
       console.error(err);
-    }
+    }  finally {
+    setLoading(false);
+  }
   };
 
   return (
@@ -330,7 +341,7 @@ const AnalysisPage = () => {
                 </div>
               )}
 
-              {step === 3 && analysisType === "regression" && (
+              {/* {step === 3 && analysisType === "regression" && (
                 <div className="flex flex-col gap-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-700 ml-0.5">
@@ -413,11 +424,76 @@ const AnalysisPage = () => {
                     Back
                   </button>
                 </div>
-              )}
+              )} */}
+              {step === 3 && analysisType === "regression" && (
+                <div className="flex flex-col gap-5">
+                  {/* 🔥 X VARIABLES (MULTI SELECT) */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700">
+                      Independent Variables (X)
+                    </label>
 
-              {step === 3 && analysisType === "pca" && (
+                    <div className="max-h-52 overflow-y-auto border rounded-xl p-3 bg-slate-50 mt-2">
+                      {columns.map((col) => (
+                        <label
+                          key={col}
+                          className="flex items-center gap-2 text-xs font-bold mb-2 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={xAxis.includes(col)}
+                            onChange={() => {
+                              setXAxis((prev) =>
+                                prev.includes(col)
+                                  ? prev.filter((c) => c !== col)
+                                  : [...prev, col],
+                              );
+                            }}
+                          />
+                          {col}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 🔥 Y VARIABLE (SINGLE SELECT) */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700">
+                      Dependent Variable (Y)
+                    </label>
+
+                    <select
+                      value={yAxis}
+                      onChange={(e) => setYAxis(e.target.value)}
+                      className="w-full mt-2 h-11 px-3 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50"
+                    >
+                      <option value="">Select Y</option>
+                      {columns
+                        .filter((col) => !xAxis.includes(col)) // avoid same variable
+                        .map((col) => (
+                          <option key={col} value={col}>
+                            {col}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* 🔙 BACK */}
+                  <button
+                    onClick={() => {
+                      setStep(2);
+                      setXAxis([]);
+                      setYAxis("");
+                    }}
+                    className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white text-xs font-bold"
+                  >
+                    Back
+                  </button>
+                </div>
+              )}
+              {/* {step === 3 && analysisType === "pca" && (
                 <div className="space-y-6">
-                  {/* Column Selection */}
+               
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-700 ml-0.5">
                       Select Columns (Features)
@@ -454,13 +530,12 @@ const AnalysisPage = () => {
                         ))}
                       </SelectContent>
                     </Select>
-
+                      
                     <p className="text-[10px] text-slate-400 font-medium uppercase">
                       Select numeric columns only
                     </p>
                   </div>
 
-                  {/* Variance Threshold */}
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-700 ml-0.5">
                       Variance Threshold (%)
@@ -484,13 +559,69 @@ const AnalysisPage = () => {
                     </p>
                   </div>
 
-                  {/* Back Button */}
                   <button
                     onClick={() => {
                       setStep(2);
                       setXAxis([]);
                     }}
                     className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg hover:bg-[#1a337a]"
+                  >
+                    Back
+                  </button>
+                </div>
+              )} */}
+              {step === 3 && analysisType === "pca" && (
+                <div className="space-y-5">
+                  {/* 🔥 FEATURE SELECTION */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700">
+                      Select Features
+                    </label>
+
+                    <div className="max-h-52 overflow-y-auto border rounded-xl p-3 bg-slate-50 mt-2">
+                      {numericColumns.map((col) => (
+                        <label
+                          key={col}
+                          className="flex items-center gap-2 text-xs font-bold mb-2 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={xAxis.includes(col)}
+                            onChange={() => {
+                              setXAxis((prev) =>
+                                prev.includes(col)
+                                  ? prev.filter((c) => c !== col)
+                                  : [...prev, col],
+                              );
+                            }}
+                          />
+                          {col}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 🔥 VARIANCE */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700">
+                      Variance Threshold (%)
+                    </label>
+
+                    <input
+                      type="number"
+                      value={variance}
+                      onChange={(e) => setVariance(Number(e.target.value))}
+                      className="w-full mt-2 h-11 px-3 rounded-xl border border-slate-200 text-xs font-bold"
+                    />
+                  </div>
+
+                  {/* 🔙 BACK */}
+                  <button
+                    onClick={() => {
+                      setStep(2);
+                      setXAxis([]);
+                    }}
+                    className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white text-xs font-bold"
                   >
                     Back
                   </button>
