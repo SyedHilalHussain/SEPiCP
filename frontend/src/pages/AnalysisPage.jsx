@@ -1,26 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Database,
-  Settings2,
-  BarChart3,
-  ChevronRight,
-  Zap,
-  Info,
-  Loader2,
-  History,
-} from "lucide-react";
+import { Database, Settings2, BarChart3, Zap, History } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Switch } from "../components/ui/switch";
-import { motion, AnimatePresence } from "framer-motion";
-import { theme } from "../styles/theme";
 import { Button } from "../components/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "../components/ui/card";
 import {
   Select,
@@ -29,11 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Badge } from "../components/ui/badge";
-import { useAuth } from "../context/AuthContext";
 
 const AnalysisPage = () => {
-  const { user, logActivity } = useAuth();
   const [dataset] = useState("Fall_2023_Survey_Results.xlsx");
   const [xAxis, setXAxis] = useState([]);
   const [yAxis, setYAxis] = useState("");
@@ -47,7 +32,6 @@ const AnalysisPage = () => {
   const [numericColumns, setNumericColumns] = useState([]);
   const [variance, setVariance] = useState(95);
 
-  const [result, setResult] = useState(null);
   const [analysisType, setAnalysisType] = useState("");
   const navigate = useNavigate();
 
@@ -187,12 +171,27 @@ const AnalysisPage = () => {
       });
 
       const data = await response.json();
-      setResult(data);
+      navigate("/results", {
+        state: {
+          analysisType,
+          result: data,
+          datasetId: selected.id,
+          datasetCreatedAt: selected.created_at,
+        },
+      });
     } catch (err) {
       console.error(err);
-    }  finally {
-    setLoading(false);
-  }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectAll = (availableColumns) => {
+    if (xAxis.length === availableColumns.length) {
+      setXAxis([]); // Unselect all
+    } else {
+      setXAxis([...availableColumns]); // Select all
+    }
   };
 
   return (
@@ -429,9 +428,28 @@ const AnalysisPage = () => {
                 <div className="flex flex-col gap-5">
                   {/* 🔥 X VARIABLES (MULTI SELECT) */}
                   <div>
-                    <label className="text-xs font-bold text-slate-700">
+                    {/* <label className="text-xs font-bold text-slate-700">
                       Independent Variables (X)
-                    </label>
+                    </label> */}
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs font-bold text-slate-700">
+                        Independent Variables (X)
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setXAxis(
+                            xAxis.length === columns.length ? [] : [...columns],
+                          )
+                        }
+                        className="text-xs font-bold text-[#1e3a8a] hover:underline"
+                      >
+                        {xAxis.length === columns.length
+                          ? "Clear All"
+                          : "Select All"}
+                      </button>
+                    </div>
 
                     <div className="max-h-52 overflow-y-auto border rounded-xl p-3 bg-slate-50 mt-2">
                       {columns.map((col) => (
@@ -574,9 +592,30 @@ const AnalysisPage = () => {
                 <div className="space-y-5">
                   {/* 🔥 FEATURE SELECTION */}
                   <div>
-                    <label className="text-xs font-bold text-slate-700">
+                    {/* <label className="text-xs font-bold text-slate-700">
                       Select Features
-                    </label>
+                    </label> */}
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs font-bold text-slate-700">
+                        Select Features
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setXAxis(
+                            xAxis.length === numericColumns.length
+                              ? []
+                              : [...numericColumns],
+                          )
+                        }
+                        className="text-xs font-bold text-[#1e3a8a] hover:underline"
+                      >
+                        {xAxis.length === numericColumns.length
+                          ? "Clear All"
+                          : "Select All"}
+                      </button>
+                    </div>
 
                     <div className="max-h-52 overflow-y-auto border rounded-xl p-3 bg-slate-50 mt-2">
                       {numericColumns.map((col) => (
@@ -722,123 +761,15 @@ const AnalysisPage = () => {
               </div>
             )}
 
-            {!loading && result && analysisType === "regression" && (
-              <div className="relative z-10 w-full h-full overflow-y-auto p-6 space-y-6">
-                {/* 🔥 METRICS */}
-                <div className="bg-white rounded-xl p-4 shadow">
-                  <h3 className="font-bold text-sm mb-2">Model Metrics</h3>
-                  <p className="text-xs">R²: {result.metrics?.r2}</p>
-                  <p className="text-xs">RMSE: {result.metrics?.rmse}</p>
-                  <p className="text-xs">Intercept: {result.intercept}</p>
-                </div>
-
-                {/* 🔥 COEFFICIENTS */}
-                <div className="bg-white rounded-xl p-4 shadow">
-                  <h3 className="font-bold text-sm mb-2">Coefficients</h3>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-left">
-                        <th>Feature</th>
-                        <th>Coefficient</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.coefficients?.map((item, index) => (
-                        <tr key={index}>
-                          <td>{item.feature}</td>
-                          <td>{item.coefficient.toFixed(4)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* 🔥 PLOTS */}
-                <div className="bg-white rounded-xl p-4 shadow">
-                  <h3 className="font-bold text-sm mb-2">Plots</h3>
-                  <div className="grid grid-cols-1 gap-4">
-                    {result.plots?.map((img, index) => (
-                      <img
-                        key={index}
-                        src={img} // ✅ already base64
-                        alt={`plot-${index}`}
-                        className="w-full rounded-lg border"
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* 🔥 PREDICTIONS (OPTIONAL) */}
-                <div className="bg-white rounded-xl p-4 shadow">
-                  <h3 className="font-bold text-sm mb-2">Predictions Sample</h3>
-                  <pre className="text-[10px] overflow-x-auto">
-                    {JSON.stringify(result.predictions_sample, null, 2)}
-                  </pre>
-                </div>
-              </div>
-            )}
-
-            {!loading && result && analysisType === "pca" && (
-              <div className="relative z-10 w-full h-full overflow-y-auto p-6 space-y-6">
-                {/* 🔥 SUMMARY */}
-                <div className="bg-white rounded-xl p-4 shadow">
-                  <h3 className="font-bold text-sm mb-2">Summary</h3>
-                  <p className="text-xs">
-                    Total Features: {result.summary?.total_features}
-                  </p>
-                  <p className="text-xs">
-                    Components Selected: {result.summary?.components_selected}
-                  </p>
-                  <p className="text-xs">
-                    Total Variance: {result.summary?.total_variance}%
-                  </p>
-                </div>
-
-                {/* 🔥 VARIANCE EXPLAINED */}
-                <div className="bg-white rounded-xl p-4 shadow">
-                  <h3 className="font-bold text-sm mb-2">Variance Explained</h3>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr>
-                        <th>Component</th>
-                        <th>Variance %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.variance_explained?.map((v, i) => (
-                        <tr key={i}>
-                          <td>{v.component_num}</td>
-                          <td>{v.variance_percent}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* 🔥 SCREE PLOT */}
-                <div className="bg-white rounded-xl p-4 shadow">
-                  <h3 className="font-bold text-sm mb-2">Scree Plot</h3>
-                  <img
-                    src={result.scree_plot}
-                    className="w-full rounded-lg border"
-                  />
-                </div>
-
-                {/* 🔥 PCA PLOTS */}
-                <div className="bg-white rounded-xl p-4 shadow">
-                  <h3 className="font-bold text-sm mb-2">PCA Visualizations</h3>
-                  <div className="space-y-4">
-                    {result.plots?.map((plot, index) => (
-                      <div key={index}>
-                        <p className="text-xs font-bold mb-1">{plot.title}</p>
-                        <img
-                          src={plot.image}
-                          className="w-full rounded-lg border"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            {!loading && (
+              <div className="relative z-10 flex flex-col items-center gap-3 p-8 text-center">
+                <p className="text-xl sm:text-2xl font-black text-slate-900">
+                  Ready To Run Analysis
+                </p>
+                <p className="text-[12px] font-bold text-slate-500 max-w-md">
+                  Configure variables and click Run Analysis. Results will open
+                  in the Results page in a structured report format.
+                </p>
               </div>
             )}
 

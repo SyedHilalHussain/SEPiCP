@@ -101,8 +101,8 @@ class UploadDatasetView(APIView):
             original_data = json.loads(df.to_json(orient='records', date_format='iso'))
 
             # Clean data
-            # cleaned_data = clean_dataset(original_data)
-            cleaned_data = json.loads(df.to_json(orient='records', date_format='iso'))
+            cleaned_data = clean_dataset(original_data)
+            # cleaned_data = json.loads(df.to_json(orient='records', date_format='iso'))
 
             # Save to DB
             dataset = Dataset.objects.create(
