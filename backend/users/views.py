@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from .services.cleaning_service import clean_dataset
 from .services.analysis.regression_service import perform_regression_analysis
 from .services.analysis.pca_service import perform_pca_analysis
+from .services.analysis.basic_analysis_service import perform_basic_analysis
 from .models import AnalysisResult
 
 User = get_user_model()
@@ -195,6 +196,31 @@ class PCAAnalysisView(APIView):
                     "variance_threshold": variance_threshold,
                     "missing_values": missing_values
                 },
+                output_results=results
+            )
+
+            return Response(results, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class BasicAnalysisView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data.get("data")
+
+        if not data:
+            return Response({"error": "Missing required parameter: data"}, 
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            results = perform_basic_analysis(data)
+
+            # Store in database
+            AnalysisResult.objects.create(
+                user=request.user,
+                analysis_type='basic',
+                input_params={},
                 output_results=results
             )
 

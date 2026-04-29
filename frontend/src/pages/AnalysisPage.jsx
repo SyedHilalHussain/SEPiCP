@@ -26,6 +26,9 @@ const AnalysisPage = () => {
   const [loading, setLoading] = useState(true);
   const [datasets, setDatasets] = useState([]);
 
+  const [basicAnalysis, setBasicAnalysis] = useState(null);
+  const [basicLoading, setBasicLoading] = useState(false);
+
   const [step, setStep] = useState(1);
   const [selectedDataset, setSelectedDataset] = useState("");
   const [columns, setColumns] = useState([]);
@@ -39,6 +42,52 @@ const AnalysisPage = () => {
   //   const timer = setTimeout(() => setLoading(false), 2000);
   //   return () => clearTimeout(timer);
   // }, []);
+  const fetchBasicAnalysis = async (datasetId) => {
+    const selected = datasets.find((d) => d.id.toString() === datasetId);
+
+    if (!selected?.cleaned_data) return;
+
+    try {
+      setBasicLoading(true);
+
+      const response = await fetch(
+        "http://127.0.0.1:8080/api/analysis/basic/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("access")}`,
+          },
+          body: JSON.stringify({
+            data: selected.cleaned_data,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      console.log("Basic Analysis Response:", data);
+
+      if (response.ok) {
+        setBasicAnalysis(data);
+      } else {
+        console.error("Basic Analysis Error:", data);
+      }
+    } catch (error) {
+      console.error("Basic Analysis Fetch Error:", error);
+    } finally {
+      setBasicLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (selectedDataset) {
+      fetchBasicAnalysis(selectedDataset);
+    } else {
+      setBasicAnalysis(null);
+    }
+  }, [selectedDataset]);
+
   React.useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 2000);
 
@@ -193,6 +242,17 @@ const AnalysisPage = () => {
       setXAxis([...availableColumns]); // Select all
     }
   };
+
+  const StatBox = ({ label, value }) => (
+  <div className="rounded-xl bg-white border border-slate-200 p-3">
+    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+      {label}
+    </p>
+    <p className="text-lg font-black text-slate-900 mt-1">
+      {typeof value === "number" ? value.toFixed(2) : value ?? "N/A"}
+    </p>
+  </div>
+);
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
@@ -762,15 +822,98 @@ const AnalysisPage = () => {
             )}
 
             {!loading && (
-              <div className="relative z-10 flex flex-col items-center gap-3 p-8 text-center">
-                <p className="text-xl sm:text-2xl font-black text-slate-900">
-                  Ready To Run Analysis
-                </p>
-                <p className="text-[12px] font-bold text-slate-500 max-w-md">
-                  Configure variables and click Run Analysis. Results will open
-                  in the Results page in a structured report format.
-                </p>
-              </div>
+              <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white">
+                <CardHeader>
+                  <CardTitle className="text-xl font-black text-slate-900">
+                    Analysis Preview
+                  </CardTitle>
+                </CardHeader>
+
+                <CardContent>
+                  {basicLoading ? (
+                    <div className="text-center py-12">
+                      <p className="text-slate-500 font-medium">
+                        Loading basic analysis...
+                      </p>
+                    </div>
+                  ) : basicAnalysis ? (
+                    <div className="space-y-6">
+                      {/* Overview */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="rounded-2xl bg-blue-50 p-5 border border-blue-100">
+                          <p className="text-sm text-slate-500">Rows</p>
+                          <p className="text-3xl font-black text-blue-700">
+                            {basicAnalysis.total_rows}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl bg-emerald-50 p-5 border border-emerald-100">
+                          <p className="text-sm text-slate-500">Columns</p>
+                          <p className="text-3xl font-black text-emerald-700">
+                            {basicAnalysis.total_columns}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl bg-violet-50 p-5 border border-violet-100">
+                          <p className="text-sm text-slate-500">Features Analyzed</p>
+                          <p className="text-3xl font-black text-violet-700">
+                            {Object.keys(basicAnalysis.columns || {}).length}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Column Summary */}
+                      <div className="space-y-3">
+                        {Object.entries(basicAnalysis.columns || {}).map(
+                          ([column, stats]) => (
+                            <div
+                              key={column}
+                              className="rounded-2xl border border-slate-200 p-4 bg-slate-50"
+                            >
+                              <div className="flex justify-between items-center">
+                                <h4 className="font-bold text-slate-900">{column}</h4>
+                                <span className="text-sm px-3 py-1 rounded-full bg-white border text-slate-600 capitalize">
+                                  {stats.type}
+                                </span>
+                              </div>
+
+                              {stats.type === "numeric" ? (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                                  <StatBox label="Mean" value={stats.mean} />
+                                  <StatBox label="Median" value={stats.median} />
+                                  <StatBox label="Min" value={stats.min} />
+                                  <StatBox label="Max" value={stats.max} />
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                                  <StatBox label="Unique" value={stats.unique_count} />
+                                  <StatBox label="Mode" value={stats.mode} />
+                                  <StatBox label="Missing" value={stats.missing} />
+                                  <StatBox
+                                    label="Missing %"
+                                    value={`${stats.missing_percent}%`}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <BarChart3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+                      <h3 className="text-xl font-bold text-slate-700 mb-2">
+                        Ready To Run Analysis
+                      </h3>
+                      <p className="text-slate-500 max-w-md mx-auto">
+                        Configure variables and click Run Analysis. Results will appear here
+                        as an interactive preview before opening in the Results page.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
 
             {/* Bottom Controls as seen in image */}

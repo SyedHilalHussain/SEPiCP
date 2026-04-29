@@ -8,6 +8,9 @@ import {
   Download,
   FileText,
   Users,
+  Sigma,
+  Layers,
+  Info,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import {
@@ -316,6 +319,87 @@ const ResultsPage = () => {
                         />
                       </CardContent>
                     </Card>
+                  ))}
+                </div>
+              </Card>
+
+              {/* NEW: PC Equations Section */}
+              <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6 overflow-hidden">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <Sigma className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Principal Component Equations
+                  </h3>
+                </div>
+                
+                <div className="space-y-4">
+                  {(result.pc_equations || []).map((eq, index) => (
+                    <div 
+                      key={index} 
+                      className="group p-5 rounded-2xl bg-slate-50 border border-slate-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all duration-300"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-black text-blue-600 uppercase tracking-widest bg-blue-100 px-2.5 py-1 rounded-md">
+                          {eq.pc_name}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400">Linear Combination</span>
+                      </div>
+                      <div className="font-mono text-[13px] leading-relaxed text-slate-700 bg-white/50 p-4 rounded-xl border border-slate-100 break-all">
+                        <span className="font-bold text-blue-700">{eq.pc_name} = </span>
+                        {eq.equation}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              {/* NEW: Variable Contributions Table/Grid */}
+              <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-emerald-50 rounded-lg">
+                    <Layers className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Variable Contributions (Top Features)
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {(result.pc_variable_table || []).map((pc, idx) => (
+                    <div key={idx} className="flex flex-col h-full">
+                      <div className="flex items-center justify-between mb-3 px-1">
+                        <h4 className="font-black text-slate-800 text-sm">{pc.pc_name} Dominant Variables</h4>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Impact Threshold > 0.30</span>
+                      </div>
+                      
+                      <div className="flex-1 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 space-y-2">
+                        {pc.important_variables && pc.important_variables.length > 0 ? (
+                          pc.important_variables.map((v, vIdx) => (
+                            <div key={vIdx} className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-100 shadow-sm">
+                              <span className="text-sm font-bold text-slate-700">{v.feature_name}</span>
+                              <div className="flex items-center gap-2">
+                                <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full ${v.loading > 0 ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                                    style={{ width: `${Math.min(Math.abs(v.loading) * 100, 100)}%` }}
+                                  ></div>
+                                </div>
+                                <span className={`text-[11px] font-black w-12 text-right ${v.loading > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                  {v.loading > 0 ? '+' : ''}{v.loading.toFixed(3)}
+                                </span>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-8">
+                            <Info className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-tight">No dominant variables found</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </Card>
