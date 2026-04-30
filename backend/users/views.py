@@ -9,6 +9,10 @@ from .models import Dataset
 from .serializers import RegisterSerializer, UserSerializer, DatasetSerializer      
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from .services.cleaning_service import clean_dataset
+from .services.analysis.regression_service import perform_regression_analysis
+from .services.analysis.pca_service import perform_pca_analysis
+from .services.analysis.basic_analysis_service import perform_basic_analysis
+from .models import AnalysisResult
 
 User = get_user_model()
 
@@ -21,9 +25,27 @@ User = get_user_model()
 #     return serializer.errors
 
 # 1️⃣ Register View
-class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = RegisterSerializer
+# class RegisterView(generics.CreateAPIView):
+#     queryset = User.objects.all()
+#     serializer_class = RegisterSerializer
+class RegisterView(APIView):
+
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+
+        if serializer.is_valid():
+            user = serializer.save()
+
+            return Response({
+                "success": True,
+                "message": "User registered successfully",
+                "user": UserSerializer(user).data
+            }, status=status.HTTP_201_CREATED)
+
+        return Response({
+            "success": False,
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 # 2️⃣ Get Logged-in User Profile
@@ -55,100 +77,153 @@ class AdminDashboardView(APIView):
             "admin_users": admin_users,
         })
 
-class UserDatasetListView(generics.ListAPIView):
-    serializer_class = DatasetSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        return Dataset.objects.filter(user=self.request.user).order_by('-created_at')
-
-from rest_framework.parsers import MultiPartParser, FormParser
 import pandas as pd
 import json
 
 class UploadDatasetView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request):
-        file_obj = request.data.get('file')
-        
-        if not file_obj:
+
+        file = request.FILES.get("file")
+
+        if not file:
             return Response(
-                {"error": "No file provided"},
+                {"error": "No file uploaded"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            # Calculate file hash to prevent duplicates
-            import hashlib
-            file_content = file_obj.read()
-            file_hash = hashlib.sha256(file_content).hexdigest()
-            file_obj.seek(0) # Reset pointer so pandas can read it
-            
-            existing_dataset = Dataset.objects.filter(user=request.user, file_hash=file_hash).first()
-            if existing_dataset:
-                cleaned_columns = list(existing_dataset.cleaned_data[0].keys()) if existing_dataset.cleaned_data else []
-                return Response({
-                    "id": existing_dataset.id,
-                    "cleaned_data": existing_dataset.cleaned_data[:100],
-                    "columns": cleaned_columns,
-                    "message": "Dataset already exists. Loaded from history."
-                }, status=status.HTTP_200_OK)
+            # 🔥 Read Excel file
+            df = pd.read_excel(file)
 
-            # Read Excel file
-            if file_obj.name.endswith('.xlsx') or file_obj.name.endswith('.xls'):
-                df = pd.read_excel(file_obj)
-            else:
-                return Response(
-                    {"error": "Unsupported file format. Please upload .xlsx or .xls"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            # Convert to list of dicts (raw data)
+            # original_data = df.to_dict(orient='records')
+            original_data = json.loads(df.to_json(orient='records', date_format='iso'))
 
-            import json
-            # Pandas to_json automatically handles all native datetimes, NaNs, and converts them
-            # safely to standard pure JSON strings and nulls without crashing.
-            original_data_json = df.to_json(orient='records', date_format='iso')
-            original_data = json.loads(original_data_json)
-
-            # Clean dataset
+            # Clean data
             cleaned_data = clean_dataset(original_data)
+            # cleaned_data = json.loads(df.to_json(orient='records', date_format='iso'))
 
-            # Store in database
+            # Save to DB
             dataset = Dataset.objects.create(
                 user=request.user,
-                file_hash=file_hash,
+                original_data=original_data,
                 cleaned_data=cleaned_data
             )
 
-            # Return cleaned data for preview
-            # Extract keys from cleaned_data to ensure mapping works
-            cleaned_columns = list(cleaned_data[0].keys()) if cleaned_data else []
+            serializer = DatasetSerializer(dataset)
 
-            return Response({
-                "id": dataset.id,
-                "cleaned_data": cleaned_data[:100],
-                "columns": cleaned_columns
-            }, status=status.HTTP_201_CREATED)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            import traceback
-            print(traceback.format_exc())
             return Response(
                 {"error": "Processing failed", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
+        
 class UserDatasetListView(generics.ListAPIView):
     serializer_class = DatasetSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Dataset.objects.filter(user=self.request.user).order_by('-created_at')
+        return Dataset.objects.filter(
+            user=self.request.user
+        ).order_by('-created_at')
 
-class DatasetDetailView(generics.RetrieveAPIView):
-    serializer_class = DatasetSerializer
+class MultipleLinearRegressionView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        return Dataset.objects.filter(user=self.request.user)
+    def post(self, request):
+        independent_vars = request.data.get("independent_vars")
+        dependent_var = request.data.get("dependent_var")
+        data = request.data.get("data")
+        missing_values = request.data.get("missing_values", "drop")
+
+        if not all([independent_vars, dependent_var, data]):
+            return Response({"error": "Missing required parameters: independent_vars, dependent_var, and data"}, 
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            results = perform_regression_analysis(independent_vars, dependent_var, data, missing_values)
+            
+            # Store in database
+            AnalysisResult.objects.create(
+                user=request.user,
+                analysis_type='regression',
+                input_params={
+                    "independent_vars": independent_vars,
+                    "dependent_var": dependent_var,
+                    "missing_values": missing_values
+                },
+                output_results=results
+            )
+
+            return Response(results, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class PCAAnalysisView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data.get("data")
+        selected_columns = request.data.get("selected_columns")
+        n_components = request.data.get("n_components")
+        variance_threshold = request.data.get("variance_threshold")
+        missing_values = request.data.get("missing_values", "drop")
+
+        if not all([data, selected_columns]):
+            return Response({"error": "Missing required parameters: data and selected_columns"}, 
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            results = perform_pca_analysis(
+                data, 
+                selected_columns, 
+                n_components=n_components, 
+                variance_threshold=variance_threshold, 
+                missing_values=missing_values
+            )
+
+            # Store in database
+            AnalysisResult.objects.create(
+                user=request.user,
+                analysis_type='pca',
+                input_params={
+                    "selected_columns": selected_columns,
+                    "n_components": n_components,
+                    "variance_threshold": variance_threshold,
+                    "missing_values": missing_values
+                },
+                output_results=results
+            )
+
+            return Response(results, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class BasicAnalysisView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data.get("data")
+
+        if not data:
+            return Response({"error": "Missing required parameter: data"}, 
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            results = perform_basic_analysis(data)
+
+            # Store in database
+            AnalysisResult.objects.create(
+                user=request.user,
+                analysis_type='basic',
+                input_params={},
+                output_results=results
+            )
+
+            return Response(results, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

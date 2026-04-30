@@ -19,7 +19,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "password", "first_name"]
+        fields = ["id", "username", "email", "password"]
     # ✅ Custom validation for username
     def validate_username(self, value):
         if " " in value:
@@ -41,7 +41,6 @@ class RegisterSerializer(serializers.ModelSerializer):
             username=validated_data["username"],
             email=validated_data["email"],
             password=validated_data["password"],
-            first_name=validated_data.get("first_name", "")
         )
         user.is_staff = False
         user.is_superuser = False
@@ -62,5 +61,5 @@ class UserSerializer(serializers.ModelSerializer):
 class DatasetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dataset
-        fields = ['id', 'cleaned_data', 'created_at']
+        fields = ['id', 'original_data', 'cleaned_data', 'created_at']
         read_only_fields = ['cleaned_data', 'created_at']
