@@ -1,23 +1,22 @@
-"""
-URL configuration for backend project.
+"""URL configuration for the backend project."""
+from pathlib import Path
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/6.0/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import include, path, re_path
+
+from .spa_views import spa_catch_all
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/', include('users.urls')),
+    path("admin/", admin.site.urls),
+    path("api/", include("users.urls")),
 ]
+
+_site_dist = Path(__file__).resolve().parent.parent / "static" / "site"
+if (_site_dist / "index.html").is_file():
+    urlpatterns.append(
+        re_path(
+            r"^(?P<path>.*)$",
+            spa_catch_all,
+            {"document_root": str(_site_dist)},
+        )
+    )

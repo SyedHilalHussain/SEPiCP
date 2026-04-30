@@ -5,6 +5,12 @@ env/
 venv/
 ENV/
 
+# Frontend build output (Vite → Django static/site)
+static/site/
+
+# collectstatic
+staticfiles/
+
 # Database
 db.sqlite3
 *.sqlite3

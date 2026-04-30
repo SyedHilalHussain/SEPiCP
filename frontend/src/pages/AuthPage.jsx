@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Shield, GraduationCap, Lock, Mail, ArrowRight, Info, AlertTriangle, User, Database } from 'lucide-react';
 import { motion,AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
+import { apiUrl } from '../lib/api';
 // import { theme } from '../styles/theme';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../components/ui/card';
@@ -45,7 +46,7 @@ const AuthPage = () => {
     try {
       if (isRegister && role === 'student') {
         console.log("Sending register:", { fullName, email, password });
-        const response = await fetch("http://127.0.0.1:8080/api/register/", {
+        const response = await fetch(apiUrl('/register/'), {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -89,7 +90,7 @@ const AuthPage = () => {
       // }
       else {
         console.log("Sending login:", { email, password });
-        const response = await fetch("http://127.0.0.1:8080/api/login/", {
+        const response = await fetch(apiUrl('/login/'), {
           method: "POST",
           headers: {
             "Content-Type": "application/json"

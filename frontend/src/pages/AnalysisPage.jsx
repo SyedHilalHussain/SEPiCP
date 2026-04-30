@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { apiUrl } from "../lib/api";
 
 const AnalysisPage = () => {
   const [dataset] = useState("Fall_2023_Survey_Results.xlsx");
@@ -51,7 +52,7 @@ const AnalysisPage = () => {
       setBasicLoading(true);
 
       const response = await fetch(
-        "http://127.0.0.1:8080/api/analysis/basic/",
+        apiUrl("/analysis/basic/"),
         {
           method: "POST",
           headers: {
@@ -93,7 +94,7 @@ const AnalysisPage = () => {
 
     const fetchDatasets = async () => {
       try {
-        const response = await fetch("http://127.0.0.1:8080/api/datasets/", {
+        const response = await fetch(apiUrl("/datasets/"), {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${localStorage.getItem("access")}`,
@@ -185,7 +186,7 @@ const AnalysisPage = () => {
         alert("Select X and Y variables");
         return;
       }
-      url = "http://127.0.0.1:8080/api/analysis/regression/";
+      url = apiUrl("/analysis/regression/");
 
       payload = {
         independent_vars: xAxis,
@@ -199,7 +200,7 @@ const AnalysisPage = () => {
         alert("Select features");
         return;
       }
-      url = "http://127.0.0.1:8080/api/analysis/pca/";
+      url = apiUrl("/analysis/pca/");
 
       payload = {
         selected_columns: xAxis,

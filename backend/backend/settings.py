@@ -10,22 +10,41 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
+
+
+def _env_bool(key: str, default: bool = False) -> bool:
+    v = os.environ.get(key, "")
+    if v == "":
+        return default
+    return v.lower() in ("1", "true", "yes", "on")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-$$b$@to0-y5ju+jdm8+cyoh0pe35e10crl3zt9)n#g$q1r$%bk'
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-$$b$@to0-y5ju+jdm8+cyoh0pe35e10crl3zt9)n#g$q1r$%bk",
+)
+DEBUG = _env_bool("DJANGO_DEBUG", True)
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
+_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf.split(",") if o.strip()]
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+_fs = os.environ.get("DJANGO_FORCE_SCRIPT_NAME", "").strip()
+FORCE_SCRIPT_NAME = _fs if _fs else None
 
 
 # Application definition
@@ -45,6 +64,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -75,16 +95,18 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-# MySQL/MariaDB on port 3307 (XAMPP); Apache typically on 8080. Django 4.2 supports MariaDB 10.4+.
+# MySQL/MariaDB; default port 3306. Use MYSQL_PORT=3307 for typical XAMPP MariaDB. Django 4.2 supports MariaDB 10.4+.
 
+# MySQL database name: create `sepicp_db` on both local MySQL/MariaDB and the server used by IIS.
+# Override host/port/user/password in CI/CD or IIS via MYSQL_* env vars (see .env.example).
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'sepicp_db',
-        'USER': 'root',
-        'PASSWORD': '',
-        'HOST': '127.0.0.1',
-        'PORT': '3307',
+        'NAME': os.environ.get('MYSQL_DATABASE', 'sepicp_db'),
+        'USER': os.environ.get('MYSQL_USER', 'root'),
+        'PASSWORD': os.environ.get('MYSQL_PASSWORD', ''),
+        'HOST': os.environ.get('MYSQL_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('MYSQL_PORT', '3306'),
     }
 }
 
@@ -123,15 +145,41 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = os.environ.get("DJANGO_STATIC_URL", "static/")
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS (same-origin SPA under IIS does not need browser CORS; set origins for split hosting)
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    _cors = [o.strip() for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+    if _cors:
+        CORS_ALLOWED_ORIGINS = _cors
+    else:
+        CORS_ALLOWED_ORIGINS = []
+        for h in ALLOWED_HOSTS:
+            if not h or h == "*" or h == "testserver":
+                continue
+            if h in ("localhost", "127.0.0.1"):
+                CORS_ALLOWED_ORIGINS.extend([f"http://{h}", f"https://{h}"])
+            else:
+                CORS_ALLOWED_ORIGINS.append(f"https://{h}")
+    if not CORS_ALLOWED_ORIGINS:
+        CORS_ALLOW_ALL_ORIGINS = True
 
 AUTH_USER_MODEL = 'users.User'
 
@@ -147,3 +195,12 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
+
+
+# Default user: created on startup if missing (disable with DEFAULT_USER_SEED=false on IIS/prod).
+DEFAULT_USER_SEED = _env_bool("DEFAULT_USER_SEED", False)
+DEFAULT_USER_EMAIL = os.environ.get("DEFAULT_USER_EMAIL", "").strip()
+DEFAULT_USER_USERNAME = os.environ.get("DEFAULT_USER_USERNAME", "").strip()
+DEFAULT_USER_PASSWORD = os.environ.get("DEFAULT_USER_PASSWORD", "")
+DEFAULT_USER_IS_STAFF = _env_bool("DEFAULT_USER_IS_STAFF", True)
+DEFAULT_USER_IS_SUPERUSER = _env_bool("DEFAULT_USER_IS_SUPERUSER", True)
