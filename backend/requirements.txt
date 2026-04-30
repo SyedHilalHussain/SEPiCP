@@ -4,7 +4,8 @@ Django>=4.2,<5
 djangorestframework>=3.14
 django-cors-headers>=4.3
 djangorestframework-simplejwt>=5.3
-mysqlclient>=2.2
+# PyMySQL: pure Python; avoids MSVC build tools on Windows. mysqlclient is optional on Linux.
+PyMySQL>=1.1.0,<2
 python-dotenv>=1.0
 pandas>=2.0,<2.1
 numpy>=1.24.4,<1.25
