@@ -1,11 +1,12 @@
 # Install inside a venv only: python -m venv venv && .\venv\Scripts\activate
+# Python 3.8: use numpy<1.25 (1.26+ needs Python 3.9+). Prefer Python 3.10+ on servers when possible.
 Django>=4.2,<5
 djangorestframework>=3.14
 django-cors-headers>=4.3
 djangorestframework-simplejwt>=5.3
 mysqlclient>=2.2
 python-dotenv>=1.0
-pandas>=2.0
-numpy>=1.26
+pandas>=2.0,<2.1
+numpy>=1.24.4,<1.25
 waitress>=3.0
 whitenoise>=6.6
