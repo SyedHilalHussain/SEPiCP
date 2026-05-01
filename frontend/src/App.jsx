@@ -57,7 +57,12 @@ export default function App() {
   const { isAuthenticated, user } = useAuth();
 
   if (!isAuthenticated) {
-    return <AuthPage />;
+    return (
+      <Routes>
+        <Route path="/register" element={<AuthPage forceRegister />} />
+        <Route path="*" element={<AuthPage />} />
+      </Routes>
+    );
   }
 
   return (

@@ -1,25 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Shield, GraduationCap, Lock, Mail, ArrowRight, Info, AlertTriangle, User, Database } from 'lucide-react';
 import { motion,AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
-import { apiUrl } from '../lib/api';
 // import { theme } from '../styles/theme';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 
-const AuthPage = () => {
+const AuthPage = ({ forceRegister = false }) => {
   const { login, register } = useAuth();
   const [role, setRole] = useState('student');
-  const [isRegister, setIsRegister] = useState(false);
+  const [isRegister, setIsRegister] = useState(forceRegister);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (forceRegister) {
+      setRole('student');
+      setIsRegister(true);
+      setError('');
+    }
+  }, [forceRegister]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,91 +54,30 @@ const AuthPage = () => {
     // }
     try {
       if (isRegister && role === 'student') {
-        console.log("Sending register:", { fullName, email, password });
-        const response = await fetch(apiUrl('/register/'), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            // username: fullName,   // sending fullName as username
-            username: fullName.replace(/\s+/g, "_").toLowerCase(),
-            email: email,
-            password: password
-          })
-        });
-  
-        const data = await response.json();
-  
-        if (!response.ok) {
-          // setError(data.message || "Registration failed");
-          setError(
-            data.error ||
-            JSON.stringify(data.errors) ||
-            data.detail ||
-            "Registration failed"
-          );
+        const result = await register(fullName, email, password);
+        if (!result.success) {
+          setError(result.message);
           setLoading(false);
           return;
         }
-  
-        // success
-        console.log("Registered:", data);
-        register(fullName, email, password);
+        setIsRegister(false);
+        setPassword('');
+        setConfirmPassword('');
+        if (forceRegister) {
+          navigate('/', { replace: true });
+        } else {
+          setError('Registration successful. Please sign in.');
+        }
         setLoading(false);
-        
-      } 
-      // else {
-      //   // keep your login logic here
-      //   const result = await login(email, password, role);
-  
-      //   if (!result.success) {
-      //     setError(result.message);
-      //     setLoading(false);
-      //   }
-      // }
-      else {
-        console.log("Sending login:", { email, password });
-        const response = await fetch(apiUrl('/login/'), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            email: email,
-            password: password
-          })
-        });
-
-        // const data = await response.json();
-
-        // if (!response.ok) {
-        //   setError(data.message || "Login failed");
-        //   setLoading(false);
-        //   return;
-        // }
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          setError(
-            data.error ||
-            data.detail ||
-            JSON.stringify(data.errors) ||
-            "Server error"
-          );
+      } else {
+        const result = await login(email, password);
+        if (!result.success) {
+          setError(result.message || 'Login failed');
           setLoading(false);
           return;
         }
-
-        // store tokens
-        localStorage.setItem("access", data.access);
-        localStorage.setItem("refresh", data.refresh);
-        login(email, password, role);
-        console.log("Login successful:", data);
-
         setLoading(false);
       }
-  
     } catch (err) {
       setError(err.message || "Server error. Please try again.");
       setLoading(false);
@@ -223,6 +171,7 @@ const AuthPage = () => {
               </CardHeader>
 
               <CardContent className="px-10 pb-10 space-y-8">
+                {!forceRegister && (
                 <div className="bg-slate-100/80 p-1.5 rounded-2xl">
                   <div className="grid grid-cols-2 gap-1">
                     <button
@@ -245,6 +194,7 @@ const AuthPage = () => {
                     </button>
                   </div>
                 </div>
+                )}
 
                 <AnimatePresence mode="wait">
                   {error && (
@@ -370,7 +320,17 @@ const AuthPage = () => {
               </CardContent>
 
               <CardFooter className="bg-slate-50/80 border-t border-slate-100 justify-center py-8">
-                {role === 'student' ? (
+                {forceRegister ? (
+                  <p className="text-sm font-bold text-slate-500">
+                    Already registered?
+                    <Link
+                      to="/"
+                      className="ml-2 text-[#1e3a8a] font-black hover:underline transition-all"
+                    >
+                      Sign In
+                    </Link>
+                  </p>
+                ) : role === 'student' ? (
                   <p className="text-sm font-bold text-slate-500">
                     {isRegister ? 'Already registered?' : 'Need institutional access?'}
                     <button
