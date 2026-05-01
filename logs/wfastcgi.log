@@ -1,0 +1,10 @@
+2026-05-01 07:40:32.586232: wfastcgi.py will restart when files in C:\inetpub\wwwroot\portal\SEPiCP\backend\ are changed: .*((\.py)|(\.config))$
+2026-05-01 07:40:32.587224: wfastcgi.py 3.0.0 initialized
+2026-05-01 07:40:38.859378: wfastcgi.py will restart when files in C:\inetpub\wwwroot\portal\SEPiCP\backend\ are changed: .*((\.py)|(\.config))$
+2026-05-01 07:40:38.860380: wfastcgi.py 3.0.0 initialized
+2026-05-01 07:45:46.695245: Unhandled exception in wfastcgi.py: Traceback (most recent call last):
+  File "C:\inetpub\wwwroot\portal\SEPiCP\venv\Lib\site-packages\wfastcgi.py", line 774, in main
+    record = read_fastcgi_record(fcgi_stream)
+  File "C:\inetpub\wwwroot\portal\SEPiCP\venv\Lib\site-packages\wfastcgi.py", line 158, in read_fastcgi_record
+    data = stream.read(8)     # read record
+OSError: [Errno 22] Invalid argument
