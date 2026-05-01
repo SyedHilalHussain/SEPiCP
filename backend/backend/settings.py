@@ -208,3 +208,37 @@ DEFAULT_USER_USERNAME = os.environ.get("DEFAULT_USER_USERNAME", "").strip()
 DEFAULT_USER_PASSWORD = os.environ.get("DEFAULT_USER_PASSWORD", "")
 DEFAULT_USER_IS_STAFF = _env_bool("DEFAULT_USER_IS_STAFF", True)
 DEFAULT_USER_IS_SUPERUSER = _env_bool("DEFAULT_USER_IS_SUPERUSER", True)
+
+# File logging for IIS (HttpPlatform stdout needs a pre-existing logs folder; Django log is always here).
+_LOG_DIR = BASE_DIR / "logs"
+_LOG_FILE = _LOG_DIR / "django.log"
+try:
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    _LOG_FILE = None
+
+if _LOG_FILE is not None:
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "std": {
+                "format": "[%(asctime)s] %(levelname)s %(name)s: %(message)s",
+            },
+        },
+        "handlers": {
+            "django_file": {
+                "level": "DEBUG" if DEBUG else "INFO",
+                "class": "logging.FileHandler",
+                "filename": str(_LOG_FILE),
+                "formatter": "std",
+            },
+        },
+        "loggers": {
+            "django.request": {
+                "handlers": ["django_file"],
+                "level": "ERROR",
+                "propagate": False,
+            },
+        },
+    }
