@@ -111,7 +111,8 @@ const AnalysisPage = () => {
           (a, b) => new Date(b.created_at) - new Date(a.created_at),
         );
 
-        setDatasets(sorted.slice(0, 5));
+        // Store all datasets; the dropdown will handle scrolling
+        setDatasets(sorted);
       } catch (err) {
         console.error("Error:", err);
       }
@@ -311,7 +312,11 @@ const AnalysisPage = () => {
                     <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
                       <SelectValue placeholder="None" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-xl border-slate-100">
+                    <SelectContent
+                      position="popper"
+                      className="rounded-xl border-slate-100 overflow-y-auto"
+                      style={{ maxHeight: "13rem" }}
+                    >
                       {datasets.length === 0 ? (
                         <SelectItem
                           value="none"

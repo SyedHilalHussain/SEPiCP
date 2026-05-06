@@ -18,11 +18,13 @@ const AuthPage = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (isRegister && role === 'student' && password !== confirmPassword) {
       setError('Passwords do not match.');
@@ -74,6 +76,7 @@ const AuthPage = () => {
   
         // success
         console.log("Registered:", data);
+        setSuccess("Account created successfully! Redirecting...");
         register(fullName, email, password);
         setLoading(false);
         
@@ -123,6 +126,7 @@ const AuthPage = () => {
         // store tokens
         localStorage.setItem("access", data.access);
         localStorage.setItem("refresh", data.refresh);
+        setSuccess("Login successful! Redirecting...");
         login(email, password, role);
         console.log("Login successful:", data);
 
@@ -248,6 +252,7 @@ const AuthPage = () => {
                 <AnimatePresence mode="wait">
                   {error && (
                     <motion.div
+                      key="error"
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
@@ -255,6 +260,18 @@ const AuthPage = () => {
                     >
                       <AlertTriangle className="w-5 h-5 shrink-0" />
                       {error}
+                    </motion.div>
+                  )}
+                  {success && (
+                    <motion.div
+                      key="success"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-3 text-green-700 text-[13px] font-black"
+                    >
+                      <Info className="w-5 h-5 shrink-0" />
+                      {success}
                     </motion.div>
                   )}
                 </AnimatePresence>
