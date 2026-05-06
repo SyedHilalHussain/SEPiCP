@@ -21,7 +21,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../components/ui/badge';
 
 import { useAuth } from '../context/AuthContext';
-import { apiUrl } from '../lib/api';
 import * as XLSX from "xlsx";
 
 const UploadPage = () => {
@@ -55,7 +54,7 @@ const UploadPage = () => {
     formData.append("file", file);
     console.log("Uploading file:", file.name, "Size:", file.size);
     const response = await fetch(
-      apiUrl("/datasets/upload/"),
+      "http://127.0.0.1:8080/api/datasets/upload/",
       {
         method: "POST",
         headers: {

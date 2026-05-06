@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Shield, GraduationCap, Lock, Mail, ArrowRight, Info, AlertTriangle, User, Database } from 'lucide-react';
 import { motion,AnimatePresence } from 'framer-motion';
@@ -10,29 +9,22 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from '../components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 
-const AuthPage = ({ forceRegister = false }) => {
+const AuthPage = () => {
   const { login, register } = useAuth();
   const [role, setRole] = useState('student');
-  const [isRegister, setIsRegister] = useState(forceRegister);
+  const [isRegister, setIsRegister] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (forceRegister) {
-      setRole('student');
-      setIsRegister(true);
-      setError('');
-    }
-  }, [forceRegister]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (isRegister && role === 'student' && password !== confirmPassword) {
       setError('Passwords do not match.');
@@ -54,30 +46,93 @@ const AuthPage = ({ forceRegister = false }) => {
     // }
     try {
       if (isRegister && role === 'student') {
-        const result = await register(fullName, email, password);
-        if (!result.success) {
-          setError(result.message);
+        console.log("Sending register:", { fullName, email, password });
+        const response = await fetch("http://127.0.0.1:8080/api/register/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            // username: fullName,   // sending fullName as username
+            username: fullName.replace(/\s+/g, "_").toLowerCase(),
+            email: email,
+            password: password
+          })
+        });
+  
+        const data = await response.json();
+  
+        if (!response.ok) {
+          // setError(data.message || "Registration failed");
+          setError(
+            data.error ||
+            JSON.stringify(data.errors) ||
+            data.detail ||
+            "Registration failed"
+          );
           setLoading(false);
           return;
         }
-        setIsRegister(false);
-        setPassword('');
-        setConfirmPassword('');
-        if (forceRegister) {
-          navigate('/', { replace: true });
-        } else {
-          setError('Registration successful. Please sign in.');
-        }
+  
+        // success
+        console.log("Registered:", data);
+        setSuccess("Account created successfully! Redirecting...");
+        register(fullName, email, password);
         setLoading(false);
-      } else {
-        const result = await login(email, password);
-        if (!result.success) {
-          setError(result.message || 'Login failed');
+        
+      } 
+      // else {
+      //   // keep your login logic here
+      //   const result = await login(email, password, role);
+  
+      //   if (!result.success) {
+      //     setError(result.message);
+      //     setLoading(false);
+      //   }
+      // }
+      else {
+        console.log("Sending login:", { email, password });
+        const response = await fetch("http://127.0.0.1:8080/api/login/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email: email,
+            password: password
+          })
+        });
+
+        // const data = await response.json();
+
+        // if (!response.ok) {
+        //   setError(data.message || "Login failed");
+        //   setLoading(false);
+        //   return;
+        // }
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          setError(
+            data.error ||
+            data.detail ||
+            JSON.stringify(data.errors) ||
+            "Server error"
+          );
           setLoading(false);
           return;
         }
+
+        // store tokens
+        localStorage.setItem("access", data.access);
+        localStorage.setItem("refresh", data.refresh);
+        setSuccess("Login successful! Redirecting...");
+        login(email, password, role);
+        console.log("Login successful:", data);
+
         setLoading(false);
       }
+  
     } catch (err) {
       setError(err.message || "Server error. Please try again.");
       setLoading(false);
@@ -171,7 +226,6 @@ const AuthPage = ({ forceRegister = false }) => {
               </CardHeader>
 
               <CardContent className="px-10 pb-10 space-y-8">
-                {!forceRegister && (
                 <div className="bg-slate-100/80 p-1.5 rounded-2xl">
                   <div className="grid grid-cols-2 gap-1">
                     <button
@@ -194,11 +248,11 @@ const AuthPage = ({ forceRegister = false }) => {
                     </button>
                   </div>
                 </div>
-                )}
 
                 <AnimatePresence mode="wait">
                   {error && (
                     <motion.div
+                      key="error"
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
@@ -206,6 +260,18 @@ const AuthPage = ({ forceRegister = false }) => {
                     >
                       <AlertTriangle className="w-5 h-5 shrink-0" />
                       {error}
+                    </motion.div>
+                  )}
+                  {success && (
+                    <motion.div
+                      key="success"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-3 text-green-700 text-[13px] font-black"
+                    >
+                      <Info className="w-5 h-5 shrink-0" />
+                      {success}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -320,17 +386,7 @@ const AuthPage = ({ forceRegister = false }) => {
               </CardContent>
 
               <CardFooter className="bg-slate-50/80 border-t border-slate-100 justify-center py-8">
-                {forceRegister ? (
-                  <p className="text-sm font-bold text-slate-500">
-                    Already registered?
-                    <Link
-                      to="/"
-                      className="ml-2 text-[#1e3a8a] font-black hover:underline transition-all"
-                    >
-                      Sign In
-                    </Link>
-                  </p>
-                ) : role === 'student' ? (
+                {role === 'student' ? (
                   <p className="text-sm font-bold text-slate-500">
                     {isRegister ? 'Already registered?' : 'Need institutional access?'}
                     <button

@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { apiUrl } from "../lib/api";
 
 const AnalysisPage = () => {
   const [dataset] = useState("Fall_2023_Survey_Results.xlsx");
@@ -52,7 +51,7 @@ const AnalysisPage = () => {
       setBasicLoading(true);
 
       const response = await fetch(
-        apiUrl("/analysis/basic/"),
+        "http://127.0.0.1:8080/api/analysis/basic/",
         {
           method: "POST",
           headers: {
@@ -94,7 +93,7 @@ const AnalysisPage = () => {
 
     const fetchDatasets = async () => {
       try {
-        const response = await fetch(apiUrl("/datasets/"), {
+        const response = await fetch("http://127.0.0.1:8080/api/datasets/", {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${localStorage.getItem("access")}`,
@@ -112,7 +111,8 @@ const AnalysisPage = () => {
           (a, b) => new Date(b.created_at) - new Date(a.created_at),
         );
 
-        setDatasets(sorted.slice(0, 5));
+        // Store all datasets; the dropdown will handle scrolling
+        setDatasets(sorted);
       } catch (err) {
         console.error("Error:", err);
       }
@@ -186,7 +186,7 @@ const AnalysisPage = () => {
         alert("Select X and Y variables");
         return;
       }
-      url = apiUrl("/analysis/regression/");
+      url = "http://127.0.0.1:8080/api/analysis/regression/";
 
       payload = {
         independent_vars: xAxis,
@@ -200,7 +200,7 @@ const AnalysisPage = () => {
         alert("Select features");
         return;
       }
-      url = apiUrl("/analysis/pca/");
+      url = "http://127.0.0.1:8080/api/analysis/pca/";
 
       payload = {
         selected_columns: xAxis,
@@ -312,7 +312,11 @@ const AnalysisPage = () => {
                     <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 rounded-xl h-11 font-bold text-slate-700 hover:bg-slate-50 transition-all text-xs">
                       <SelectValue placeholder="None" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-xl border-slate-100">
+                    <SelectContent
+                      position="popper"
+                      className="rounded-xl border-slate-100 overflow-y-auto"
+                      style={{ maxHeight: "13rem" }}
+                    >
                       {datasets.length === 0 ? (
                         <SelectItem
                           value="none"
