@@ -209,6 +209,13 @@ const AnalysisPage = () => {
       };
     }
 
+    if (analysisType === "basic") {
+      url = apiUrl("/analysis/basic/");
+      payload = {
+        data: selected.cleaned_data,
+      };
+    }
+
     try {
       setLoading(true);
       const response = await fetch(url, {
@@ -235,6 +242,7 @@ const AnalysisPage = () => {
       setLoading(false);
     }
   };
+
 
   const handleSelectAll = (availableColumns) => {
     if (xAxis.length === availableColumns.length) {
@@ -354,8 +362,9 @@ const AnalysisPage = () => {
                     Analysis Type
                   </label>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     {[
+                      { id: "basic", label: "Basic Analysis" },
                       { id: "regression", label: "Regression" },
                       { id: "pca", label: "PCA" },
                     ].map((type) => (
@@ -720,6 +729,27 @@ const AnalysisPage = () => {
                     onClick={() => {
                       setStep(2);
                       setXAxis([]);
+                    }}
+                    className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white text-xs font-bold"
+                  >
+                    Back
+                  </button>
+                </div>
+              )}
+
+              {/* Basic Analysis block */}
+              {step === 3 && analysisType === "basic" && (
+                <div className="space-y-5">
+                  <p className="text-xs font-bold text-slate-500">
+                    Basic analysis will generate descriptive statistics (mean, median, unique values, missing values, etc.) for all columns in the dataset. No variable configuration is required.
+                  </p>
+                  
+                  {/* 🔙 BACK */}
+                  <button
+                    onClick={() => {
+                      setStep(2);
+                      setXAxis([]);
+                      setYAxis("");
                     }}
                     className="h-11 px-6 rounded-xl bg-[#1e3a8a] text-white text-xs font-bold"
                   >
