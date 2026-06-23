@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, GraduationCap, Lock, Mail, ArrowRight, Info, AlertTriangle, User, Database } from 'lucide-react';
+import { Shield, GraduationCap, Lock, Mail, ArrowRight, Info, AlertTriangle, User, Database, CheckCircle2 } from 'lucide-react';
 import { motion,AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 // import { theme } from '../styles/theme';
@@ -19,6 +19,7 @@ const AuthPage = ({ forceRegister = false }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -33,6 +34,7 @@ const AuthPage = ({ forceRegister = false }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (isRegister && role === 'student' && password !== confirmPassword) {
       setError('Passwords do not match.');
@@ -66,7 +68,7 @@ const AuthPage = ({ forceRegister = false }) => {
         if (forceRegister) {
           navigate('/', { replace: true });
         } else {
-          setError('Registration successful. Please sign in.');
+          setSuccess('Registration successful. Please sign in.');
         }
         setLoading(false);
       } else {
@@ -175,7 +177,7 @@ const AuthPage = ({ forceRegister = false }) => {
                 <div className="bg-slate-100/80 p-1.5 rounded-2xl">
                   <div className="grid grid-cols-2 gap-1">
                     <button
-                      onClick={() => { setRole('student'); setIsRegister(false); setError(''); }}
+                      onClick={() => { setRole('student'); setIsRegister(false); setError(''); setSuccess(''); }}
                       className={cn(
                         "py-3 rounded-[14px] text-sm font-black transition-all",
                         role === 'student' ? "bg-white text-[#1e3a8a] shadow-md shadow-blue-900/5" : "text-slate-500 hover:text-slate-700 hover:bg-white/40"
@@ -184,7 +186,7 @@ const AuthPage = ({ forceRegister = false }) => {
                       Student Access
                     </button>
                     <button
-                      onClick={() => { setRole('admin'); setIsRegister(false); setError(''); }}
+                      onClick={() => { setRole('admin'); setIsRegister(false); setError(''); setSuccess(''); }}
                       className={cn(
                         "py-3 rounded-[14px] text-sm font-black transition-all",
                         role === 'admin' ? "bg-white text-[#1e3a8a] shadow-md shadow-blue-900/5" : "text-slate-500 hover:text-slate-700 hover:bg-white/40"
@@ -206,6 +208,17 @@ const AuthPage = ({ forceRegister = false }) => {
                     >
                       <AlertTriangle className="w-5 h-5 shrink-0" />
                       {error}
+                    </motion.div>
+                  )}
+                  {success && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-600 text-[13px] font-black"
+                    >
+                      <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-500" />
+                      {success}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -335,7 +348,7 @@ const AuthPage = ({ forceRegister = false }) => {
                     {isRegister ? 'Already registered?' : 'Need institutional access?'}
                     <button
                       type="button"
-                      onClick={() => { setIsRegister(!isRegister); setError(''); setConfirmPassword(''); }}
+                      onClick={() => { setIsRegister(!isRegister); setError(''); setSuccess(''); setConfirmPassword(''); }}
                       className="ml-2 text-[#1e3a8a] font-black hover:underline transition-all"
                     >
                       {isRegister ? 'Sign In' : 'Apply for access'}
