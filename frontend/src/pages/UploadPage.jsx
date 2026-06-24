@@ -21,21 +21,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../components/ui/badge';
 
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../lib/api';
 import * as XLSX from "xlsx";
 
 const UploadPage = () => {
   const { user, logActivity } = useAuth();
-  const [file, setFile] = useState(null);
+    // Initialize states from sessionStorage if they exist
+  const [file, setFile] = useState(() => {
+    const saved = sessionStorage.getItem('uploaded_file_info');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [isCleaning, setIsCleaning] = useState(true);
 
-  const [tableData, setTableData] = useState([]);
-  const [columns, setColumns] = useState([]);
+  const [tableData, setTableData] = useState(() => {
+    const saved = sessionStorage.getItem('uploaded_table_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
+  const [columns, setColumns] = useState(() => {
+    const saved = sessionStorage.getItem('uploaded_columns');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [loading, setLoading] = useState(false);
 
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length > 0) {
       setFile(acceptedFiles[0]);
     }
   }, []);
+
+  const handleClear = () => {
+    setFile(null);
+    setTableData([]);
+    setColumns([]);
+    sessionStorage.removeItem('uploaded_table_data');
+    sessionStorage.removeItem('uploaded_columns');
+    sessionStorage.removeItem('uploaded_file_info');
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -50,11 +72,12 @@ const UploadPage = () => {
   if (!file) return;
 
   try {
+    setLoading(true);
     const formData = new FormData();
     formData.append("file", file);
     console.log("Uploading file:", file.name, "Size:", file.size);
     const response = await fetch(
-      "http://127.0.0.1:8080/api/datasets/upload/",
+      apiUrl("/datasets/upload/"),
       {
         method: "POST",
         headers: {
@@ -67,26 +90,29 @@ const UploadPage = () => {
     const result = await response.json();
     console.log("Backend response:", result);
 
-    if (!response.ok) {
-      alert(result.error || "Upload failed");
-      return;
-    }
-
     const cleaned = result.cleaned_data || [];
-
     setTableData(cleaned);
 
     const cols = Object.keys(cleaned[0] || {}).map((key) => ({
       header: key.toUpperCase(),
       accessorKey: key
     }));
-
     setColumns(cols);
+
+    // Save to sessionStorage
+    sessionStorage.setItem('uploaded_table_data', JSON.stringify(cleaned));
+    sessionStorage.setItem('uploaded_columns', JSON.stringify(cols));
+    if (file) {
+      sessionStorage.setItem('uploaded_file_info', JSON.stringify({ name: file.name, size: file.size }));
+    }
 
     logActivity("upload", `Uploaded dataset: ${file.name}`);
 
+
   } catch (error) {
     console.error(error);
+  } finally {
+    setLoading(false);
   }
 };
 
@@ -128,7 +154,7 @@ const UploadPage = () => {
                   <FileSpreadsheet className="w-4 h-4 text-[#1e3a8a]" />
                   <span className="text-[12px] font-black text-slate-700 truncate max-w-[150px]">{file.name}</span>
                   <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 font-black text-[9px] px-2 py-0.5">Ready</Badge>
-                  <button onClick={(e) => { e.stopPropagation(); setFile(null); }} className="p-1 hover:bg-slate-100 rounded-md text-slate-400 transition-all">
+                  <button onClick={(e) => { e.stopPropagation(); handleClear(); }} className="p-1 hover:bg-slate-100 rounded-md text-slate-400 transition-all">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -208,17 +234,44 @@ const UploadPage = () => {
 
           <div className="flex flex-col sm:flex-row lg:flex-col gap-3">
             <Button
-              disabled={!file}
+              disabled={!file || loading}
               onClick={handleProcess}
-              className="flex-1 h-12 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center justify-center gap-2"
+              className="flex-1 h-12 rounded-xl bg-[#1e3a8a] text-white font-black text-[12px] uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-[#1a337a] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              Confirm & Process
-              <ArrowRight className="w-4 h-4" />
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-0.5 h-4">
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <motion.div
+                        key={i}
+                        className="w-0.5 rounded-full bg-white"
+                        style={{ height: "4px" }}
+                        animate={{
+                          height: [4, 14, 4]
+                        }}
+                        transition={{
+                          duration: 0.8,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                          delay: i * 0.15
+                        }}
+                      />
+                    ))}
+                  </div>
+                  Processing...
+                </div>
+              ) : (
+                <>
+                  Confirm & Process
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </Button>
             <Button
               variant="outline"
-              onClick={() => setFile(null)}
-              className="flex-1 h-12 rounded-xl border-slate-200 bg-white text-slate-500 font-bold text-[12px] hover:bg-slate-50 transition-all border-2"
+              disabled={loading}
+              onClick={handleClear}
+              className="flex-1 h-12 rounded-xl border-slate-200 bg-white text-slate-500 font-bold text-[12px] hover:bg-slate-50 transition-all border-2 disabled:opacity-50"
             >
               Cancel
             </Button>
@@ -243,6 +296,46 @@ const UploadPage = () => {
           <DataPreviewTable data={tableData} columns={columns} />
         </div>
       </div>
+
+      {/* Upload & Processing Full Screen Loading Overlay */}
+      {loading && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex flex-col items-center justify-center gap-8 z-[9999] transition-all duration-300 animate-in fade-in">
+          {/* Waveform container */}
+          <div className="flex items-center gap-2 h-28">
+            {[...Array(15)].map((_, i) => {
+              const shieldHeights = [16, 24, 42, 60, 76, 84, 72, 54, 72, 84, 76, 60, 42, 24, 16];
+              const undulateHeights = [
+                40 + Math.sin(i * 0.6 + 0.0) * 22,
+                40 + Math.sin(i * 0.6 + 1.5) * 22,
+                40 + Math.sin(i * 0.6 + 3.0) * 22,
+                40 + Math.sin(i * 0.6 + 4.5) * 22,
+                shieldHeights[i],
+                shieldHeights[i],
+                40 + Math.sin(i * 0.6 + 6.0) * 22,
+                40 + Math.sin(i * 0.6 + 7.5) * 22,
+              ];
+              return (
+                <motion.div
+                  key={i}
+                  className="w-1.5 rounded-full bg-gradient-to-t from-cyan-400 via-blue-500 to-purple-600"
+                  animate={{
+                    height: undulateHeights
+                  }}
+                  transition={{
+                    duration: 6,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                />
+              );
+            })}
+          </div>
+          <div className="space-y-1.5 text-center">
+            <h3 className="text-sm font-black tracking-widest text-cyan-400 uppercase animate-pulse">Learning Engagement</h3>
+            <p className="text-[11px] font-bold text-slate-400 max-w-[240px]">AI agent syncing with classroom dataset...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
