@@ -70,9 +70,9 @@ export const AuthProvider = ({ children }) => {
     return { success: true };
   };
 
-  const login = (email, password, role) => {
-    // Admin Validation
-    if (role === 'admin') {
+  const login = async (email, password, role) => {
+    // Admin (hardcoded fallback kept for dev convenience)
+    if (role === 'admin' && !localStorage.getItem('access')) {
       if (email === 'nedscholar@gmail.com' && password === '123456') {
         const adminUser = {
           id: 'admin-001',
@@ -90,33 +90,42 @@ export const AuthProvider = ({ children }) => {
       return { success: false, message: 'Invalid administrator credentials.' };
     }
 
-    // Check Registered Users first
-    const registeredUser = registeredUsers.find(u => u.email === email && u.password === password);
-    if (registeredUser) {
-      setUser(registeredUser);
-      localStorage.setItem('research_user', JSON.stringify(registeredUser));
-      localStorage.setItem('research_token', 'student-token-abc');
-      logActivity('login', 'User logged in via credentials', registeredUser);
-      return { success: true };
-    }
+    // JWT login — fetch profile to get role
+    try {
+      const tokenRes = await fetch("http://127.0.0.1:8080/api/login/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok) {
+        return { success: false, message: tokenData.detail || "Login failed." };
+      }
+      localStorage.setItem("access", tokenData.access);
+      localStorage.setItem("refresh", tokenData.refresh);
 
-    // Student Validation (Simulated fallback)
-    if (role === 'student') {
-      const studentUser = {
-        id: `stu-${Math.floor(Math.random() * 1000)}`,
-        name: email.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '),
-        email: email,
-        role: 'student',
-        department: 'Undergraduate Statistics',
+      // Fetch profile to get role
+      const profileRes = await fetch("http://127.0.0.1:8080/api/profile/", {
+        headers: { Authorization: `Bearer ${tokenData.access}` },
+      });
+      const profileData = await profileRes.json();
+
+      const userRole = profileData.role ||
+        (profileData.is_superuser ? 'admin' : 'student');
+
+      const loggedInUser = {
+        id:    profileData.id,
+        name:  profileData.username,
+        email: profileData.email,
+        role:  userRole,
       };
-      setUser(studentUser);
-      localStorage.setItem('research_user', JSON.stringify(studentUser));
-      localStorage.setItem('research_token', 'student-token-abc');
-      logActivity('login', 'User logged in via simulation', studentUser);
+      setUser(loggedInUser);
+      localStorage.setItem('research_user', JSON.stringify(loggedInUser));
+      logActivity('login', 'User logged in via JWT', loggedInUser);
       return { success: true };
+    } catch (err) {
+      return { success: false, message: 'Server error. Please try again.' };
     }
-
-    return { success: false, message: 'Select a valid role.' };
   };
 
   const logout = () => {

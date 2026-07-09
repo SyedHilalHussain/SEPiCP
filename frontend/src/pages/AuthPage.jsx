@@ -1,838 +1,397 @@
+// frontend/src/pages/AuthPage.jsx
+// ── Fix: all screen components are defined at MODULE level (not inside AuthPage)
+// ── so React never unmounts them on state changes → no re-render flicker
+
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, GraduationCap, Lock, Mail, ArrowRight, Info, AlertTriangle, User, Database } from 'lucide-react';
-import { motion,AnimatePresence } from 'framer-motion';
-import { cn } from '../lib/utils';
-// import { theme } from '../styles/theme';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  GraduationCap, BookOpen, Lock, Mail, User, Eye, EyeOff,
+  ArrowRight, CheckCircle, AlertTriangle, ChevronRight, KeyRound,
+} from 'lucide-react';
 
-const AuthPage = () => {
-  const { login, register } = useAuth();
-  const [role, setRole] = useState('student');
-  const [isRegister, setIsRegister] = useState(false);
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
+// ── Shared password input with show/hide ──────────────────────────────────────
+function PwInput({ id, placeholder, value, onChange }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={inputWrap}>
+      <Lock size={18} color="#94a3b8" style={{ flexShrink: 0 }} />
+      <input id={id} type={show ? 'text' : 'password'} placeholder={placeholder}
+        value={value} onChange={onChange} autoComplete="new-password" required
+        style={inputBase} />
+      <button type="button" onClick={() => setShow(s => !s)}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#94a3b8' }}>
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  );
+}
 
-  const handleSubmit = async (e) => {
+function TextInput({ id, type = 'text', placeholder, value, onChange, icon: Icon }) {
+  return (
+    <div style={inputWrap}>
+      <Icon size={18} color="#94a3b8" style={{ flexShrink: 0 }} />
+      <input id={id} type={type} placeholder={placeholder} value={value}
+        onChange={onChange} autoComplete="off" required style={inputBase} />
+    </div>
+  );
+}
+
+const inputWrap = {
+  display: 'flex', alignItems: 'center', gap: 12,
+  background: '#f8fafc', border: '1.5px solid #e2e8f0',
+  borderRadius: 14, padding: '0 16px',
+};
+const inputBase = {
+  flex: 1, border: 'none', background: 'transparent',
+  padding: '15px 0', fontSize: 14, color: '#0f172a',
+  outline: 'none', fontWeight: 500,
+};
+
+// ── SCREEN 1: Role chooser ────────────────────────────────────────────────────
+function ChooseScreen({ onTeacher, onStudent }) {
+  return (
+    <motion.div key="choose"
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.25 }}>
+      <div style={{ textAlign: 'center', marginBottom: 36 }}>
+        <h2 style={{ fontSize: 24, fontWeight: 900, color: '#0f172a', margin: '0 0 8px' }}>
+          Who are you?
+        </h2>
+        <p style={{ color: '#64748b', fontSize: 14 }}>Select your role to continue.</p>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Teacher */}
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          onClick={onTeacher}
+          style={roleCard}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#1e3a8a'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(30,58,138,0.1)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}>
+          <div style={{ ...roleIcon, background: '#eff6ff' }}>
+            <BookOpen size={26} color="#1e3a8a" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>I'm a Teacher</div>
+            <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
+              Register or sign in to create and publish surveys
+            </div>
+          </div>
+          <ChevronRight size={20} color="#94a3b8" />
+        </motion.button>
+
+        {/* Student */}
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          onClick={onStudent}
+          style={roleCard}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#0891b2'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(8,145,178,0.1)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}>
+          <div style={{ ...roleIcon, background: '#ecfeff' }}>
+            <GraduationCap size={26} color="#0891b2" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>I'm a Student</div>
+            <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
+              No account needed — just enter the course code from your teacher
+            </div>
+          </div>
+          <div style={{ background: '#ecfeff', color: '#0891b2', fontSize: 11,
+            fontWeight: 800, padding: '4px 10px', borderRadius: 99,
+            textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
+            No Login
+          </div>
+        </motion.button>
+      </div>
+
+      <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12, marginTop: 24 }}>
+        Admin? Contact your system administrator for access.
+      </p>
+    </motion.div>
+  );
+}
+
+const roleCard = {
+  display: 'flex', alignItems: 'center', gap: 18,
+  padding: '22px 24px', borderRadius: 18,
+  border: '2px solid #e2e8f0', background: '#fff',
+  cursor: 'pointer', textAlign: 'left', width: '100%',
+  transition: 'border-color 0.2s, box-shadow 0.2s',
+};
+const roleIcon = {
+  width: 52, height: 52, borderRadius: 14,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+};
+
+// ── SCREEN 2: Teacher Login ───────────────────────────────────────────────────
+function TeacherLoginScreen({ email, setEmail, password, setPassword, error, success, loading, onSubmit, onRegister, onBack }) {
+  return (
+    <motion.div key="teacher-login"
+      initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -40 }} transition={{ duration: 0.25 }}>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+        <div style={{ ...roleIcon, background: '#eff6ff', width: 44, height: 44, borderRadius: 12 }}>
+          <BookOpen size={20} color="#1e3a8a" />
+        </div>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#0f172a' }}>Teacher Sign In</div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>Access your survey dashboard</div>
+        </div>
+      </div>
+
+      <Alert error={error} success={success} />
+
+      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <TextInput id="t-email" type="email" placeholder="your@university.edu"
+          icon={Mail} value={email} onChange={e => setEmail(e.target.value)} />
+        <PwInput id="t-password" placeholder="Password"
+          value={password} onChange={e => setPassword(e.target.value)} />
+
+        <button type="submit" disabled={loading} style={submitBtn(loading)}>
+          {loading ? 'Signing in…' : <><KeyRound size={18} /> Sign In</>}
+        </button>
+      </form>
+
+      <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+        <p style={{ fontSize: 13, color: '#64748b' }}>
+          Don't have an account?{' '}
+          <button type="button" onClick={onRegister} style={linkBtn}>Create teacher account</button>
+        </p>
+        <button type="button" onClick={onBack} style={backBtn}>← Back to role selection</button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── SCREEN 3: Teacher Register ────────────────────────────────────────────────
+function TeacherRegisterScreen({ name, setName, email, setEmail, password, setPassword, confirmPw, setConfirmPw, error, loading, onSubmit, onLogin, onBack }) {
+  return (
+    <motion.div key="teacher-register"
+      initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -40 }} transition={{ duration: 0.25 }}>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+        <div style={{ ...roleIcon, background: '#eff6ff', width: 44, height: 44, borderRadius: 12 }}>
+          <BookOpen size={20} color="#1e3a8a" />
+        </div>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#0f172a' }}>Create Teacher Account</div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>Register to start publishing surveys</div>
+        </div>
+      </div>
+
+      <Alert error={error} />
+
+      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <TextInput id="r-name" placeholder="Full Name"
+          icon={User} value={name} onChange={e => setName(e.target.value)} />
+        <TextInput id="r-email" type="email" placeholder="Academic email (e.g. john@university.edu)"
+          icon={Mail} value={email} onChange={e => setEmail(e.target.value)} />
+        <PwInput id="r-password" placeholder="Password (min. 8 characters)"
+          value={password} onChange={e => setPassword(e.target.value)} />
+        <PwInput id="r-confirm" placeholder="Confirm Password"
+          value={confirmPw} onChange={e => setConfirmPw(e.target.value)} />
+
+        {/* Strength bar */}
+        {password.length > 0 && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            {[1,2,3,4].map(i => (
+              <div key={i} style={{ flex: 1, height: 4, borderRadius: 99,
+                background: password.length >= i * 3 ? '#1e3a8a' : '#e2e8f0',
+                transition: 'background 0.2s' }} />
+            ))}
+          </div>
+        )}
+
+        <button type="submit" disabled={loading} style={submitBtn(loading)}>
+          {loading ? 'Creating account…' : <><ArrowRight size={18} /> Create Account</>}
+        </button>
+      </form>
+
+      <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+        <p style={{ fontSize: 13, color: '#64748b' }}>
+          Already have an account?{' '}
+          <button type="button" onClick={onLogin} style={linkBtn}>Sign in</button>
+        </p>
+        <button type="button" onClick={onBack} style={backBtn}>← Back to role selection</button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Shared mini components ────────────────────────────────────────────────────
+function Alert({ error, success }) {
+  return (
+    <AnimatePresence>
+      {error && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+          style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12,
+            padding: '12px 16px', color: '#dc2626', fontSize: 13, fontWeight: 600,
+            display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 16 }}>
+          <AlertTriangle size={15} style={{ marginTop: 1, flexShrink: 0 }} />{error}
+        </motion.div>
+      )}
+      {success && !error && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+          style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12,
+            padding: '12px 16px', color: '#16a34a', fontSize: 13, fontWeight: 600,
+            display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+          <CheckCircle size={15} />{success}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+const submitBtn = (loading) => ({
+  marginTop: 8, padding: '15px', borderRadius: 14,
+  background: loading ? '#94a3b8' : '#1e3a8a',
+  color: '#fff', border: 'none', fontWeight: 800, fontSize: 15,
+  cursor: loading ? 'not-allowed' : 'pointer',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+  boxShadow: '0 4px 20px rgba(30,58,138,0.25)',
+});
+const linkBtn = {
+  background: 'none', border: 'none', color: '#1e3a8a',
+  fontWeight: 800, cursor: 'pointer', fontSize: 13,
+};
+const backBtn = {
+  background: 'none', border: 'none', color: '#94a3b8',
+  cursor: 'pointer', fontSize: 12, fontWeight: 600,
+};
+
+// ── Main AuthPage (state lives here, no inner component definitions) ───────────
+export default function AuthPage() {
+  const { login }  = useAuth();
+  const navigate   = useNavigate();
+
+  const [screen, setScreen]       = useState('choose');
+  const [name, setName]           = useState('');
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [error, setError]         = useState('');
+  const [success, setSuccess]     = useState('');
+  const [loading, setLoading]     = useState(false);
+
+  const clear = () => { setName(''); setEmail(''); setPassword(''); setConfirmPw(''); setError(''); setSuccess(''); };
+
+  const goTo = (s) => { clear(); setScreen(s); };
+
+  const handleRegister = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    if (isRegister && role === 'student' && password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
+    setError(''); setSuccess('');
+    if (password !== confirmPw) { setError('Passwords do not match.'); return; }
+    if (password.length < 8)    { setError('Password must be at least 8 characters.'); return; }
     setLoading(true);
-
-    // let result;
-    // if (isRegister && role === 'student') {
-    //   result = register(fullName, email, password);
-    // } else {
-    //   result = login(email, password, role);
-    // }
-
-    // if (!result.success) {
-    //   setError(result.message);
-    //   setLoading(false);
-    // }
     try {
-      if (isRegister && role === 'student') {
-        console.log("Sending register:", { fullName, email, password });
-        const response = await fetch("http://127.0.0.1:8080/api/register/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            // username: fullName,   // sending fullName as username
-            username: fullName.replace(/\s+/g, "_").toLowerCase(),
-            email: email,
-            password: password
-          })
-        });
-  
-        const data = await response.json();
-  
-        if (!response.ok) {
-          // setError(data.message || "Registration failed");
-          setError(
-            data.error ||
-            JSON.stringify(data.errors) ||
-            data.detail ||
-            "Registration failed"
-          );
-          setLoading(false);
-          return;
-        }
-  
-        // success
-        console.log("Registered:", data);
-        setSuccess("Account created successfully! Redirecting...");
-        register(fullName, email, password);
-        setLoading(false);
-        
-      } 
-      // else {
-      //   // keep your login logic here
-      //   const result = await login(email, password, role);
-  
-      //   if (!result.success) {
-      //     setError(result.message);
-      //     setLoading(false);
-      //   }
-      // }
-      else {
-        console.log("Sending login:", { email, password });
-        const response = await fetch("http://127.0.0.1:8080/api/login/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            email: email,
-            password: password
-          })
-        });
-
-        // const data = await response.json();
-
-        // if (!response.ok) {
-        //   setError(data.message || "Login failed");
-        //   setLoading(false);
-        //   return;
-        // }
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          setError(
-            data.error ||
-            data.detail ||
-            JSON.stringify(data.errors) ||
-            "Server error"
-          );
-          setLoading(false);
-          return;
-        }
-
-        // store tokens
-        localStorage.setItem("access", data.access);
-        localStorage.setItem("refresh", data.refresh);
-        setSuccess("Login successful! Redirecting...");
-        login(email, password, role);
-        console.log("Login successful:", data);
-
-        setLoading(false);
+      const res  = await fetch('http://127.0.0.1:8080/api/register/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: name.trim().toLowerCase().replace(/\s+/g, '_'),
+          email: email.trim(),
+          password,
+          role: 'teacher',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.detail || Object.values(data).flat().join(' '));
+        return;
       }
-  
-    } catch (err) {
-      setError(err.message || "Server error. Please try again.");
+      setSuccess('Account created! Please sign in.');
+      goTo('teacher-login');
+    } catch {
+      setError('Server error. Make sure the backend is running.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    setLoading(true);
+    try {
+      const result = await login(email.trim(), password, 'teacher');
+      if (!result.success) setError(result.message || 'Login failed.');
+      // On success AuthContext sets user → App.jsx redirects to /teacher
+    } catch {
+      setError('Server error. Make sure the backend is running.');
+    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#F8FAFC]">
-      {/* Background Dots Pattern */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.35]">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `radial-gradient(#94a3b8 0.5px, transparent 0.5px)`,
-            backgroundSize: '24px 24px'
-          }}
-        />
+    <div style={{ minHeight: '100vh',
+      background: 'linear-gradient(135deg, #f0f4ff 0%, #f8fafc 50%, #e0f2fe 100%)',
+      display: 'flex' }}>
+
+      {/* ── Left hero (md+ screens) ── */}
+      <div className="auth-hero" style={{ flex: 1, flexDirection: 'column',
+        justifyContent: 'center', padding: '60px 72px',
+        background: '#1e3a8a', position: 'relative', overflow: 'hidden', display: 'none' }}>
+        <div style={{ position: 'absolute', top: -80, right: -80, width: 300, height: 300,
+          borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+        <div style={{ position: 'absolute', bottom: -60, left: -60, width: 250, height: 250,
+          borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 56 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12,
+              background: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <GraduationCap size={24} color="#fff" />
+            </div>
+            <span style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>SEPiCP</span>
+          </div>
+          <h1 style={{ fontSize: 42, fontWeight: 900, color: '#fff', lineHeight: 1.15, marginBottom: 20 }}>
+            Student Engagement<br />&amp; Pedagogy<br />
+            <span style={{ color: '#93c5fd' }}>Evaluation Platform</span>
+          </h1>
+          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1.7, maxWidth: 400, marginBottom: 44 }}>
+            A research tool bridging instructor pedagogy and student experience through structured, anonymous evaluation surveys.
+          </p>
+          {['📋 75-field Instructor Survey', '📝 84-field Student Survey',
+            '🔐 Anonymous Student Responses', '📊 Built-in Analytics'].map(item => (
+            <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <CheckCircle size={15} color="#4ade80" />
+              <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: 600 }}>{item}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Header */}
-      <header className="relative z-20 w-full px-12 py-8 flex justify-between items-center max-w-[1600px] mx-auto bg-white/50 backdrop-blur-sm border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#1e3a8a] rounded-lg shadow-lg shadow-blue-900/20">
-            <GraduationCap className="w-6 h-6 text-white" />
+      {/* ── Right form panel ── */}
+      <div style={{ width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column',
+        justifyContent: 'center', alignItems: 'center', padding: '40px 24px', margin: '0 auto' }}>
+        {/* Mobile logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 36 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 11, background: '#1e3a8a',
+            display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <GraduationCap size={22} color="#fff" />
           </div>
-          <span className="text-xl font-black text-slate-800 tracking-tight">University Research Data Management</span>
+          <span style={{ fontSize: 17, fontWeight: 900, color: '#0f172a' }}>SEPiCP</span>
         </div>
-        <button className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-[#1e3a8a] transition-all">
-          <div className="w-6 h-6 rounded-full bg-slate-200/50 flex items-center justify-center text-xs text-slate-600 border border-slate-300 font-black">?</div>
-          Help & Support
-        </button>
-      </header>
 
-      <main className="flex-1 flex items-center justify-center relative z-10 px-8 py-16">
-        <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
-          <div className="hidden lg:flex flex-col gap-12">
-            <div className="space-y-8">
-              <div
-                className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest bg-blue-50/50 border border-blue-100 shadow-sm"
-                style={{ color: '#1e3a8a' }}
-              >
-                <div className="relative flex h-2.5 w-2.5">
-                  <div className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1e3a8a] opacity-75"></div>
-                  <div className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1e3a8a]"></div>
-                </div>
-                System Operational
-              </div>
-              <h1 className="text-7xl font-black tracking-tight leading-[1.05] text-slate-900 drop-shadow-sm">
-                Advance Your <br />
-                Research <br />
-                <span className="text-[#1e3a8a]">Securely & Efficiently</span>
-              </h1>
-              <p className="text-xl text-slate-500 max-w-lg leading-relaxed font-medium">
-                Access the centralized database for academic publications, datasets, and collaborative projects. Secure login required.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-8 max-w-xl">
-              <Card className="p-8 rounded-[32px] border-slate-100 shadow-xl shadow-slate-200/50 bg-white group hover:scale-[1.02] transition-transform">
-                <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mb-6 shadow-inner group-hover:bg-[#1e3a8a] transition-colors">
-                  <Shield className="w-6 h-6 text-[#1e3a8a] group-hover:text-white transition-colors" />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 text-base">Secure Access</h3>
-                  <p className="text-sm font-medium text-slate-500 mt-2 leading-relaxed text-balance">End-to-end encrypted session management.</p>
-                </div>
-              </Card>
-              <Card className="p-8 rounded-[32px] border-slate-100 shadow-xl shadow-slate-200/50 bg-white group hover:scale-[1.02] transition-transform">
-                <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mb-6 shadow-inner group-hover:bg-[#1e3a8a] transition-colors">
-                  <Database className="w-6 h-6 text-[#1e3a8a] group-hover:text-white transition-colors" />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 text-base">Global Data</h3>
-                  <p className="text-sm font-medium text-slate-500 mt-2 leading-relaxed text-balance">Connect with 50+ partner university archives.</p>
-                </div>
-              </Card>
-            </div>
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md mx-auto"
-          >
-            <Card className="rounded-[40px] shadow-[0_45px_100px_-20px_rgba(30,58,138,0.12)] border-slate-200/60 overflow-hidden bg-white">
-              <CardHeader className="text-center pt-14 pb-8 space-y-3">
-                <CardTitle className="text-3xl font-black text-slate-900 tracking-tight">Secure Access Portal</CardTitle>
-                <CardDescription className="text-slate-400 font-bold px-6">
-                  {isRegister ? 'Enter your details to create a student account.' : 'Please sign in to access the research database.'}
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="px-10 pb-10 space-y-8">
-                <div className="bg-slate-100/80 p-1.5 rounded-2xl">
-                  <div className="grid grid-cols-2 gap-1">
-                    <button
-                      onClick={() => { setRole('student'); setIsRegister(false); setError(''); }}
-                      className={cn(
-                        "py-3 rounded-[14px] text-sm font-black transition-all",
-                        role === 'student' ? "bg-white text-[#1e3a8a] shadow-md shadow-blue-900/5" : "text-slate-500 hover:text-slate-700 hover:bg-white/40"
-                      )}
-                    >
-                      Student Access
-                    </button>
-                    <button
-                      onClick={() => { setRole('admin'); setIsRegister(false); setError(''); }}
-                      className={cn(
-                        "py-3 rounded-[14px] text-sm font-black transition-all",
-                        role === 'admin' ? "bg-white text-[#1e3a8a] shadow-md shadow-blue-900/5" : "text-slate-500 hover:text-slate-700 hover:bg-white/40"
-                      )}
-                    >
-                      Admin Portal
-                    </button>
-                  </div>
-                </div>
-
-                <AnimatePresence mode="wait">
-                  {error && (
-                    <motion.div
-                      key="error"
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-[13px] font-black"
-                    >
-                      <AlertTriangle className="w-5 h-5 shrink-0" />
-                      {error}
-                    </motion.div>
-                  )}
-                  {success && (
-                    <motion.div
-                      key="success"
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-3 text-green-700 text-[13px] font-black"
-                    >
-                      <Info className="w-5 h-5 shrink-0" />
-                      {success}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="space-y-6">
-                    {isRegister && role === 'student' && (
-                      <div className="space-y-2">
-                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Name</label>
-                        <div className="relative">
-                          <User className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                          <Input
-                            type="text"
-                            required
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                            placeholder="John Doe"
-                            className="pl-14 h-16 rounded-[18px] bg-slate-50/50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-800"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                        {role === 'admin' ? 'Administrator Email' : 'University ID or Email'}
-                      </label>
-                      <div className="relative">
-                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                        <Input
-                          type="email"
-                          required
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder={role === 'admin' ? "admin@university.edu" : "Enter your ID (e.g. 2024001)"}
-                          className="pl-14 h-16 rounded-[18px] bg-slate-50/50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-800"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between ml-1">
-                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Password</label>
-                        {!isRegister && <button type="button" className="text-xs font-black text-[#1e3a8a] hover:underline opacity-90 transition-opacity">Forgot password?</button>}
-                      </div>
-                      <div className="relative">
-                        <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                        <Input
-                          type="password"
-                          required
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="pl-14 h-16 rounded-[18px] bg-slate-50/50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-800"
-                        />
-                      </div>
-                    </div>
-
-                    {isRegister && role === 'student' && (
-                      <div className="space-y-2">
-                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Confirm Password</label>
-                        <div className="relative">
-                          <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                          <Input
-                            type="password"
-                            required
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            placeholder="••••••••"
-                            className="pl-14 h-16 rounded-[18px] bg-slate-50/50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-800"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {!isRegister && (
-                    <div className="flex items-center gap-3 ml-1">
-                      <input type="checkbox" className="w-5 h-5 rounded-lg border-slate-300 text-[#1e3a8a] focus:ring-[#1e3a8a] cursor-pointer" id="remember" />
-                      <label htmlFor="remember" className="text-sm font-bold text-slate-600 cursor-pointer select-none">Keep me signed in for 30 days</label>
-                    </div>
-                  )}
-
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full h-16 rounded-2xl bg-[#1e3a8a] hover:bg-[#1a337a] text-white font-black text-lg shadow-2xl shadow-blue-950/20 transition-all active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {loading ? (
-                      <div className="flex items-center gap-3">
-                        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}>
-                          <Shield className="w-5 h-5" />
-                        </motion.div>
-                        Processing...
-                      </div>
-                    ) : (
-                      <span className="flex items-center gap-2">
-                        {isRegister ? 'Log My Account' : 'Sign In To Portal'}
-                        <ArrowRight className="w-5 h-5" />
-                      </span>
-                    )}
-                  </Button>
-
-                  <div className="flex items-start gap-4 p-5 bg-blue-50/50 rounded-2xl border border-blue-100/50">
-                    <Info className="w-5 h-5 shrink-0 mt-0.5 text-[#1e3a8a]" />
-                    <div className="text-xs text-slate-600 leading-relaxed font-medium">
-                      <span className="font-black block mb-1 text-[#1e3a8a] uppercase tracking-widest">Session Security</span>
-                      Your connection is end-to-end encrypted. Audit logs are recorded for institutional security compliance.
-                    </div>
-                  </div>
-                </form>
-              </CardContent>
-
-              <CardFooter className="bg-slate-50/80 border-t border-slate-100 justify-center py-8">
-                {role === 'student' ? (
-                  <p className="text-sm font-bold text-slate-500">
-                    {isRegister ? 'Already registered?' : 'Need institutional access?'}
-                    <button
-                      type="button"
-                      onClick={() => { setIsRegister(!isRegister); setError(''); setConfirmPassword(''); }}
-                      className="ml-2 text-[#1e3a8a] font-black hover:underline transition-all"
-                    >
-                      {isRegister ? 'Sign In' : 'Apply for access'}
-                    </button>
-                  </p>
-                ) : (
-                  <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                    Institutional Admin Portal
-                  </p>
-                )}
-              </CardFooter>
-            </Card>
-          </motion.div>
+        {/* Card */}
+        <div style={{ width: '100%', background: '#fff', borderRadius: 28, padding: '40px 36px',
+          boxShadow: '0 20px 80px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
+          <AnimatePresence mode="wait">
+            {screen === 'choose'           && <ChooseScreen onTeacher={() => goTo('teacher-login')} onStudent={() => navigate('/survey/student')} />}
+            {screen === 'teacher-login'    && <TeacherLoginScreen email={email} setEmail={setEmail} password={password} setPassword={setPassword} error={error} success={success} loading={loading} onSubmit={handleLogin} onRegister={() => goTo('teacher-register')} onBack={() => goTo('choose')} />}
+            {screen === 'teacher-register' && <TeacherRegisterScreen name={name} setName={setName} email={email} setEmail={setEmail} password={password} setPassword={setPassword} confirmPw={confirmPw} setConfirmPw={setConfirmPw} error={error} loading={loading} onSubmit={handleRegister} onLogin={() => goTo('teacher-login')} onBack={() => goTo('choose')} />}
+          </AnimatePresence>
         </div>
-      </main>
 
-      <footer className="relative z-20 w-full py-10 text-center text-slate-500 text-xs font-black border-t border-slate-100 bg-white tracking-widest uppercase">
-        Copyright © 2024 University Research Board. All rights reserved. • Privacy Policy • Terms of Use
-      </footer>
+        <p style={{ marginTop: 20, color: '#94a3b8', fontSize: 12, textAlign: 'center' }}>
+          © 2026 SEPiCP · All responses are confidential
+        </p>
+      </div>
+
+      <style>{`@media (min-width: 900px) { .auth-hero { display: flex !important; } }`}</style>
     </div>
   );
-};
-
-export default AuthPage;
-
-
-// import React, { useState } from 'react';
-// import { useAuth } from '../context/AuthContext';
-// import { Shield, GraduationCap, Lock, Mail, ArrowRight, Info, AlertTriangle, User, Database } from 'lucide-react';
-// import { motion,AnimatePresence } from 'framer-motion';
-// import { cn } from '../lib/utils';
-// // import { theme } from '../styles/theme';
-// import { Button } from '../components/ui/button';
-// import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../components/ui/card';
-// import { Input } from '../components/ui/input';
-// import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
-
-// const AuthPage = () => {
-//   const { login, register } = useAuth();
-//   const [role, setRole] = useState('student');
-//   const [isRegister, setIsRegister] = useState(false);
-//   const [fullName, setFullName] = useState('');
-//   const [email, setEmail] = useState('');
-//   const [password, setPassword] = useState('');
-//   const [confirmPassword, setConfirmPassword] = useState('');
-//   const [error, setError] = useState('');
-//   const [success, setSuccess] = useState('');
-//   const [loading, setLoading] = useState(false);
-
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-//     setError('');
-//     setSuccess('');
-
-//     if (isRegister && role === 'student' && password !== confirmPassword) {
-//       setError('Passwords do not match.');
-//       return;
-//     }
-
-//     setLoading(true);
-
-//     // let result;
-//     // if (isRegister && role === 'student') {
-//     //   result = register(fullName, email, password);
-//     // } else {
-//     //   result = login(email, password, role);
-//     // }
-
-//     // if (!result.success) {
-//     //   setError(result.message);
-//     //   setLoading(false);
-//     // }
-//     try {
-//       if (isRegister && role === 'student') {
-//         console.log("Sending register:", { fullName, email, password });
-//         const response = await fetch("http://127.0.0.1:8080/api/register/", {
-//           method: "POST",
-//           headers: {
-//             "Content-Type": "application/json"
-//           },
-//           body: JSON.stringify({
-//             // username: fullName,   // sending fullName as username
-//             username: fullName.replace(/\s+/g, "_").toLowerCase(),
-//             email: email,
-//             password: password
-//           })
-//         });
-  
-//         const data = await response.json();
-  
-//         if (!response.ok) {
-//           // setError(data.message || "Registration failed");
-//           setError(
-//             data.error ||
-//             JSON.stringify(data.errors) ||
-//             data.detail ||
-//             "Registration failed"
-//           );
-//           setLoading(false);
-//           return;
-//         }
-  
-//         // success
-//         console.log("Registered:", data);
-//         setSuccess("Account created successfully! Redirecting...");
-//         register(fullName, email, password);
-//         setLoading(false);
-        
-//       } 
-//       // else {
-//       //   // keep your login logic here
-//       //   const result = await login(email, password, role);
-  
-//       //   if (!result.success) {
-//       //     setError(result.message);
-//       //     setLoading(false);
-//       //   }
-//       // }
-//       else {
-//         console.log("Sending login:", { email, password });
-//         const response = await fetch("http://127.0.0.1:8080/api/login/", {
-//           method: "POST",
-//           headers: {
-//             "Content-Type": "application/json"
-//           },
-//           body: JSON.stringify({
-//             email: email,
-//             password: password
-//           })
-//         });
-
-//         // const data = await response.json();
-
-//         // if (!response.ok) {
-//         //   setError(data.message || "Login failed");
-//         //   setLoading(false);
-//         //   return;
-//         // }
-//         const data = await response.json().catch(() => ({}));
-
-//         if (!response.ok) {
-//           setError(
-//             data.error ||
-//             data.detail ||
-//             JSON.stringify(data.errors) ||
-//             "Server error"
-//           );
-//           setLoading(false);
-//           return;
-//         }
-
-//         // store tokens
-//         localStorage.setItem("access", data.access);
-//         localStorage.setItem("refresh", data.refresh);
-//         setSuccess("Login successful! Redirecting...");
-//         login(email, password, role);
-//         console.log("Login successful:", data);
-
-//         setLoading(false);
-//       }
-  
-//     } catch (err) {
-//       setError(err.message || "Server error. Please try again.");
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#F8FAFC]">
-//       {/* Background Dots Pattern */}
-//       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.35]">
-//         <div
-//           className="absolute inset-0"
-//           style={{
-//             backgroundImage: `radial-gradient(#94a3b8 0.5px, transparent 0.5px)`,
-//             backgroundSize: '24px 24px'
-//           }}
-//         />
-//       </div>
-
-//       {/* Header */}
-//       <header className="relative z-20 w-full px-12 py-8 flex justify-between items-center max-w-[1600px] mx-auto bg-white/50 backdrop-blur-sm border-b border-slate-100">
-//         <div className="flex items-center gap-3">
-//           <div className="p-2 bg-[#1e3a8a] rounded-lg shadow-lg shadow-blue-900/20">
-//             <GraduationCap className="w-6 h-6 text-white" />
-//           </div>
-//           <span className="text-xl font-black text-slate-800 tracking-tight">University Research Data Management</span>
-//         </div>
-//         <button className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-[#1e3a8a] transition-all">
-//           <div className="w-6 h-6 rounded-full bg-slate-200/50 flex items-center justify-center text-xs text-slate-600 border border-slate-300 font-black">?</div>
-//           Help & Support
-//         </button>
-//       </header>
-
-//       <main className="flex-1 flex items-center justify-center relative z-10 px-8 py-16">
-//         <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
-//           <div className="hidden lg:flex flex-col gap-12">
-//             <div className="space-y-8">
-//               <div
-//                 className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest bg-blue-50/50 border border-blue-100 shadow-sm"
-//                 style={{ color: '#1e3a8a' }}
-//               >
-//                 <div className="relative flex h-2.5 w-2.5">
-//                   <div className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1e3a8a] opacity-75"></div>
-//                   <div className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1e3a8a]"></div>
-//                 </div>
-//                 System Operational
-//               </div>
-//               <h1 className="text-7xl font-black tracking-tight leading-[1.05] text-slate-900 drop-shadow-sm">
-//                 Advance Your <br />
-//                 Research <br />
-//                 <span className="text-[#1e3a8a]">Securely & Efficiently</span>
-//               </h1>
-//               <p className="text-xl text-slate-500 max-w-lg leading-relaxed font-medium">
-//                 Access the centralized database for academic publications, datasets, and collaborative projects. Secure login required.
-//               </p>
-//             </div>
-
-//             <div className="grid grid-cols-2 gap-8 max-w-xl">
-//               <Card className="p-8 rounded-[32px] border-slate-100 shadow-xl shadow-slate-200/50 bg-white group hover:scale-[1.02] transition-transform">
-//                 <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mb-6 shadow-inner group-hover:bg-[#1e3a8a] transition-colors">
-//                   <Shield className="w-6 h-6 text-[#1e3a8a] group-hover:text-white transition-colors" />
-//                 </div>
-//                 <div>
-//                   <h3 className="font-black text-slate-900 text-base">Secure Access</h3>
-//                   <p className="text-sm font-medium text-slate-500 mt-2 leading-relaxed text-balance">End-to-end encrypted session management.</p>
-//                 </div>
-//               </Card>
-//               <Card className="p-8 rounded-[32px] border-slate-100 shadow-xl shadow-slate-200/50 bg-white group hover:scale-[1.02] transition-transform">
-//                 <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mb-6 shadow-inner group-hover:bg-[#1e3a8a] transition-colors">
-//                   <Database className="w-6 h-6 text-[#1e3a8a] group-hover:text-white transition-colors" />
-//                 </div>
-//                 <div>
-//                   <h3 className="font-black text-slate-900 text-base">Global Data</h3>
-//                   <p className="text-sm font-medium text-slate-500 mt-2 leading-relaxed text-balance">Connect with 50+ partner university archives.</p>
-//                 </div>
-//               </Card>
-//             </div>
-//           </div>
-
-//           <motion.div
-//             initial={{ opacity: 0, scale: 0.98 }}
-//             animate={{ opacity: 1, scale: 1 }}
-//             className="w-full max-w-md mx-auto"
-//           >
-//             <Card className="rounded-[40px] shadow-[0_45px_100px_-20px_rgba(30,58,138,0.12)] border-slate-200/60 overflow-hidden bg-white">
-//               <CardHeader className="text-center pt-14 pb-8 space-y-3">
-//                 <CardTitle className="text-3xl font-black text-slate-900 tracking-tight">Secure Access Portal</CardTitle>
-//                 <CardDescription className="text-slate-400 font-bold px-6">
-//                   {isRegister ? 'Enter your details to create a student account.' : 'Please sign in to access the research database.'}
-//                 </CardDescription>
-//               </CardHeader>
-
-//               <CardContent className="px-10 pb-10 space-y-8">
-//                 <div className="bg-slate-100/80 p-1.5 rounded-2xl">
-//                   <div className="grid grid-cols-2 gap-1">
-//                     <button
-//                       onClick={() => { setRole('student'); setIsRegister(false); setError(''); }}
-//                       className={cn(
-//                         "py-3 rounded-[14px] text-sm font-black transition-all",
-//                         role === 'student' ? "bg-white text-[#1e3a8a] shadow-md shadow-blue-900/5" : "text-slate-500 hover:text-slate-700 hover:bg-white/40"
-//                       )}
-//                     >
-//                       Student Access
-//                     </button>
-//                     <button
-//                       onClick={() => { setRole('admin'); setIsRegister(false); setError(''); }}
-//                       className={cn(
-//                         "py-3 rounded-[14px] text-sm font-black transition-all",
-//                         role === 'admin' ? "bg-white text-[#1e3a8a] shadow-md shadow-blue-900/5" : "text-slate-500 hover:text-slate-700 hover:bg-white/40"
-//                       )}
-//                     >
-//                       Admin Portal
-//                     </button>
-//                   </div>
-//                 </div>
-
-//                 <AnimatePresence mode="wait">
-//                   {error && (
-//                     <motion.div
-//                       key="error"
-//                       initial={{ opacity: 0, y: -10 }}
-//                       animate={{ opacity: 1, y: 0 }}
-//                       exit={{ opacity: 0, y: -10 }}
-//                       className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-[13px] font-black"
-//                     >
-//                       <AlertTriangle className="w-5 h-5 shrink-0" />
-//                       {error}
-//                     </motion.div>
-//                   )}
-//                   {success && (
-//                     <motion.div
-//                       key="success"
-//                       initial={{ opacity: 0, y: -10 }}
-//                       animate={{ opacity: 1, y: 0 }}
-//                       exit={{ opacity: 0, y: -10 }}
-//                       className="p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-3 text-green-700 text-[13px] font-black"
-//                     >
-//                       <Info className="w-5 h-5 shrink-0" />
-//                       {success}
-//                     </motion.div>
-//                   )}
-//                 </AnimatePresence>
-
-//                 <form onSubmit={handleSubmit} className="space-y-6">
-//                   <div className="space-y-6">
-//                     {isRegister && role === 'student' && (
-//                       <div className="space-y-2">
-//                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Name</label>
-//                         <div className="relative">
-//                           <User className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-//                           <Input
-//                             type="text"
-//                             required
-//                             value={fullName}
-//                             onChange={(e) => setFullName(e.target.value)}
-//                             placeholder="John Doe"
-//                             className="pl-14 h-16 rounded-[18px] bg-slate-50/50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-800"
-//                           />
-//                         </div>
-//                       </div>
-//                     )}
-
-//                     <div className="space-y-2">
-//                       <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">
-//                         {role === 'admin' ? 'Administrator Email' : 'University ID or Email'}
-//                       </label>
-//                       <div className="relative">
-//                         <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-//                         <Input
-//                           type="email"
-//                           required
-//                           value={email}
-//                           onChange={(e) => setEmail(e.target.value)}
-//                           placeholder={role === 'admin' ? "admin@university.edu" : "Enter your ID (e.g. 2024001)"}
-//                           className="pl-14 h-16 rounded-[18px] bg-slate-50/50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-800"
-//                         />
-//                       </div>
-//                     </div>
-
-//                     <div className="space-y-2">
-//                       <div className="flex items-center justify-between ml-1">
-//                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Password</label>
-//                         {!isRegister && <button type="button" className="text-xs font-black text-[#1e3a8a] hover:underline opacity-90 transition-opacity">Forgot password?</button>}
-//                       </div>
-//                       <div className="relative">
-//                         <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-//                         <Input
-//                           type="password"
-//                           required
-//                           value={password}
-//                           onChange={(e) => setPassword(e.target.value)}
-//                           placeholder="••••••••"
-//                           className="pl-14 h-16 rounded-[18px] bg-slate-50/50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-800"
-//                         />
-//                       </div>
-//                     </div>
-
-//                     {isRegister && role === 'student' && (
-//                       <div className="space-y-2">
-//                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Confirm Password</label>
-//                         <div className="relative">
-//                           <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-//                           <Input
-//                             type="password"
-//                             required
-//                             value={confirmPassword}
-//                             onChange={(e) => setConfirmPassword(e.target.value)}
-//                             placeholder="••••••••"
-//                             className="pl-14 h-16 rounded-[18px] bg-slate-50/50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-800"
-//                           />
-//                         </div>
-//                       </div>
-//                     )}
-//                   </div>
-
-//                   {!isRegister && (
-//                     <div className="flex items-center gap-3 ml-1">
-//                       <input type="checkbox" className="w-5 h-5 rounded-lg border-slate-300 text-[#1e3a8a] focus:ring-[#1e3a8a] cursor-pointer" id="remember" />
-//                       <label htmlFor="remember" className="text-sm font-bold text-slate-600 cursor-pointer select-none">Keep me signed in for 30 days</label>
-//                     </div>
-//                   )}
-
-//                   <Button
-//                     type="submit"
-//                     disabled={loading}
-//                     className="w-full h-16 rounded-2xl bg-[#1e3a8a] hover:bg-[#1a337a] text-white font-black text-lg shadow-2xl shadow-blue-950/20 transition-all active:scale-[0.98] disabled:opacity-50"
-//                   >
-//                     {loading ? (
-//                       <div className="flex items-center gap-3">
-//                         <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}>
-//                           <Shield className="w-5 h-5" />
-//                         </motion.div>
-//                         Processing...
-//                       </div>
-//                     ) : (
-//                       <span className="flex items-center gap-2">
-//                         {isRegister ? 'Log My Account' : 'Sign In To Portal'}
-//                         <ArrowRight className="w-5 h-5" />
-//                       </span>
-//                     )}
-//                   </Button>
-
-//                   <div className="flex items-start gap-4 p-5 bg-blue-50/50 rounded-2xl border border-blue-100/50">
-//                     <Info className="w-5 h-5 shrink-0 mt-0.5 text-[#1e3a8a]" />
-//                     <div className="text-xs text-slate-600 leading-relaxed font-medium">
-//                       <span className="font-black block mb-1 text-[#1e3a8a] uppercase tracking-widest">Session Security</span>
-//                       Your connection is end-to-end encrypted. Audit logs are recorded for institutional security compliance.
-//                     </div>
-//                   </div>
-//                 </form>
-//               </CardContent>
-
-//               <CardFooter className="bg-slate-50/80 border-t border-slate-100 justify-center py-8">
-//                 {role === 'student' ? (
-//                   <p className="text-sm font-bold text-slate-500">
-//                     {isRegister ? 'Already registered?' : 'Need institutional access?'}
-//                     <button
-//                       type="button"
-//                       onClick={() => { setIsRegister(!isRegister); setError(''); setConfirmPassword(''); }}
-//                       className="ml-2 text-[#1e3a8a] font-black hover:underline transition-all"
-//                     >
-//                       {isRegister ? 'Sign In' : 'Apply for access'}
-//                     </button>
-//                   </p>
-//                 ) : (
-//                   <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
-//                     Institutional Admin Portal
-//                   </p>
-//                 )}
-//               </CardFooter>
-//             </Card>
-//           </motion.div>
-//         </div>
-//       </main>
-
-//       <footer className="relative z-20 w-full py-10 text-center text-slate-500 text-xs font-black border-t border-slate-100 bg-white tracking-widest uppercase">
-//         Copyright © 2024 University Research Board. All rights reserved. • Privacy Policy • Terms of Use
-//       </footer>
-//     </div>
-//   );
-// };
-
-// export default AuthPage;
+}

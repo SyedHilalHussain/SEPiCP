@@ -147,8 +147,9 @@ const TopBar = () => {
     return (
         <header className="h-16 flex items-center justify-between px-6 mx-4 md:mx-8 lg:mx-10 mt-4 mb-2 rounded-2xl border border-slate-200/50 bg-white/75 backdrop-blur-md shadow-[0_8px_30px_rgb(0,0,0,0.02)] z-40 transition-all shrink-0">
             {/* Sequential Navigation Steps */}
-            <nav className="flex items-center gap-1 ml-12 lg:ml-0">
-                {steps.map((step, idx) => {
+            {!location.pathname.startsWith('/teacher') && (
+                <nav className="flex items-center gap-1 ml-12 lg:ml-0">
+                    {steps.map((step, idx) => {
                     const isActive = location.pathname === step.path;
                     const isCompleted = idx < currentStepIdx && currentStepIdx !== -1;
                     
@@ -193,7 +194,8 @@ const TopBar = () => {
                         </React.Fragment>
                     );
                 })}
-            </nav>
+                </nav>
+            )}
 
             {/* Right-side quick controls */}
             <div className="flex items-center gap-3 sm:gap-4">
