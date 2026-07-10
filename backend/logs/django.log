@@ -1384,3 +1384,5 @@ TypeError: Dataset() got unexpected keyword arguments: 'name', 'description', 'd
 [2026-07-09 22:09:25,103] ERROR django.request: Internal Server Error: /api/analysis/pca/
 [2026-07-09 22:38:34,052] ERROR django.request: Internal Server Error: /api/analysis/pca/
 [2026-07-09 22:39:09,642] ERROR django.request: Internal Server Error: /api/analysis/regression/
+[2026-07-10 22:11:28,961] ERROR django.request: Internal Server Error: /api/analysis/regression/
+[2026-07-10 22:13:42,795] ERROR django.request: Internal Server Error: /api/analysis/regression/
