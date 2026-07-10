@@ -18,3 +18,4 @@ seaborn>=0.13.0
 
 waitress>=3.0
 whitenoise>=6.6
+openpyxl>=3.1.0

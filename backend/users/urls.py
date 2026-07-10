@@ -20,6 +20,8 @@ from .views import (
     StudentSurveySubmitView,
     StudentSurveyEditView,
     AdminSurveyListView,
+    AdminSurveyExportView,
+    AdminSurveyToDatasetView,
     TeacherDashboardView,
 )
 
@@ -58,4 +60,6 @@ urlpatterns = [
 
     # ── Admin Survey View ─────────────────────────────────────────────────────
     path("admin/surveys/",   AdminSurveyListView.as_view()),
+    path("admin/surveys/export/", AdminSurveyExportView.as_view()),
+    path("admin/surveys/to-dataset/", AdminSurveyToDatasetView.as_view()),
 ]

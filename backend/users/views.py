@@ -86,20 +86,31 @@ class UploadDatasetView(APIView):
     def post(self, request):
 
         file = request.FILES.get("file")
+        json_data = request.data.get("data")
+        
+        # DEBUG LOGGING
+        with open("upload_debug.txt", "w") as f:
+            f.write(f"file: {file}\n")
+            f.write(f"request.data type: {type(request.data)}\n")
+            f.write(f"request.data keys: {request.data.keys() if hasattr(request.data, 'keys') else 'No keys'}\n")
+            f.write(f"request.data: {request.data}\n")
+            f.write(f"json_data type: {type(json_data)}\n")
+            f.write(f"json_data: {str(json_data)[:200]}\n")
 
-        if not file:
+        if file is None and not json_data:
             return Response(
-                {"error": "No file uploaded"},
+                {"error": "No file or data uploaded, or dataset is empty."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            # 🔥 Read Excel file
-            df = pd.read_excel(file)
-
-            # Convert to list of dicts (raw data)
-            # original_data = df.to_dict(orient='records')
-            original_data = json.loads(df.to_json(orient='records', date_format='iso'))
+            if file:
+                # 🔥 Read Excel file
+                df = pd.read_excel(file)
+                original_data = json.loads(df.to_json(orient='records', date_format='iso'))
+            else:
+                # Use provided JSON data
+                original_data = json_data
 
             # Clean data
             cleaned_data = clean_dataset(original_data)
@@ -435,3 +446,95 @@ class AdminSurveyListView(APIView):
             row['student_response_count'] = s.student_surveys.count()
             data.append(row)
         return Response(data)
+
+import pandas as pd
+import io
+from django.http import HttpResponse
+
+class AdminSurveyExportView(APIView):
+    """GET — Export all survey responses as an Excel file with two sheets."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        export_type = request.GET.get('type')
+        
+        if export_type == 'instructor':
+            data = InstructorSurvey.objects.filter(status='published').values()
+            df = pd.DataFrame(list(data))
+            if df.empty:
+                df = pd.DataFrame(columns=["id", "teacher_id", "course_code"])
+            filename = 'instructor_responses.xlsx'
+            sheet = 'Instructors'
+        elif export_type == 'student':
+            data = StudentSurvey.objects.filter(is_published=True).values()
+            df = pd.DataFrame(list(data))
+            if df.empty:
+                df = pd.DataFrame(columns=["id", "course_code"])
+            filename = 'student_responses.xlsx'
+            sheet = 'Students'
+        else:
+            from rest_framework.response import Response
+            return Response({"error": "Invalid or missing type parameter"}, status=400)
+
+        # Convert timezone-aware datetimes to timezone-unaware
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].dt.tz_localize(None)
+
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name=sheet, index=False)
+
+        buffer.seek(0)
+        
+        response = HttpResponse(
+            buffer.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+class AdminSurveyToDatasetView(APIView):
+    """POST — Retrieve surveys as raw data to populate the Upload table."""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        convert_type = request.GET.get('type')
+        if not convert_type:
+            from rest_framework.response import Response
+            return Response({"error": "Missing type parameter"}, status=400)
+            
+        dataset = None
+        
+        if convert_type == 'instructor':
+            instructors = InstructorSurvey.objects.filter(status='published').values()
+            df = pd.DataFrame(list(instructors))
+            name = "Instructor Responses (Auto-Generated)"
+            desc = "Imported from published instructor surveys."
+        elif convert_type == 'student':
+            students = StudentSurvey.objects.filter(is_published=True).values()
+            df = pd.DataFrame(list(students))
+            name = "Student Responses (Auto-Generated)"
+            desc = "Imported from published student surveys."
+        else:
+            from rest_framework.response import Response
+            return Response({"error": "Invalid type parameter"}, status=400)
+
+        if df.empty:
+            from rest_framework.response import Response
+            return Response({"error": "No data found for the selected survey type"}, status=404)
+
+        # Convert datetimes
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].astype(str)
+
+        data_dict = df.to_dict(orient='records')
+        
+        from rest_framework.response import Response
+        return Response({
+            "message": f"{name} retrieved successfully.",
+            "data": data_dict,
+            "columns": list(df.columns),
+            "name": name
+        })
