@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   GraduationCap, BookOpen, Lock, Mail, User, Eye, EyeOff,
-  ArrowRight, CheckCircle, AlertTriangle, ChevronRight, KeyRound,
+  ArrowRight, CheckCircle, AlertTriangle, ChevronRight, KeyRound, Shield
 } from 'lucide-react';
 
 // ── Shared password input with show/hide ──────────────────────────────────────
@@ -50,7 +50,7 @@ const inputBase = {
 };
 
 // ── SCREEN 1: Role chooser ────────────────────────────────────────────────────
-function ChooseScreen({ onTeacher, onStudent }) {
+function ChooseScreen({ onTeacher, onStudent, onAdmin }) {
   return (
     <motion.div key="choose"
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -102,11 +102,24 @@ function ChooseScreen({ onTeacher, onStudent }) {
             No Login
           </div>
         </motion.button>
+        {/* Admin */}
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          onClick={onAdmin}
+          style={roleCard}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#15803d'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(21,128,61,0.1)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}>
+          <div style={{ ...roleIcon, background: '#f0fdf4' }}>
+            <Shield size={26} color="#15803d" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>I'm an Admin</div>
+            <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
+              Superuser access to system management and responses
+            </div>
+          </div>
+          <ChevronRight size={20} color="#94a3b8" />
+        </motion.button>
       </div>
-
-      <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12, marginTop: 24 }}>
-        Admin? Contact your system administrator for access.
-      </p>
     </motion.div>
   );
 }
@@ -157,6 +170,46 @@ function TeacherLoginScreen({ email, setEmail, password, setPassword, error, suc
         <p style={{ fontSize: 13, color: '#64748b' }}>
           Don't have an account?{' '}
           <button type="button" onClick={onRegister} style={linkBtn}>Create teacher account</button>
+        </p>
+        <button type="button" onClick={onBack} style={backBtn}>← Back to role selection</button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── SCREEN 3: Admin Login ───────────────────────────────────────────────────
+function AdminLoginScreen({ email, setEmail, password, setPassword, error, success, loading, onSubmit, onBack }) {
+  return (
+    <motion.div key="admin-login"
+      initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -40 }} transition={{ duration: 0.25 }}>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+        <div style={{ ...roleIcon, background: '#f0fdf4', width: 44, height: 44, borderRadius: 12 }}>
+          <Shield size={20} color="#15803d" />
+        </div>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#0f172a' }}>Admin Sign In</div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>Superuser privileges required</div>
+        </div>
+      </div>
+
+      <Alert error={error} success={success} />
+
+      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <TextInput id="a-email" type="email" placeholder="admin@system.edu"
+          icon={Mail} value={email} onChange={e => setEmail(e.target.value)} />
+        <PwInput id="a-password" placeholder="Password"
+          value={password} onChange={e => setPassword(e.target.value)} />
+
+        <button type="submit" disabled={loading} style={{ ...submitBtn(loading), background: '#15803d', boxShadow: '0 4px 20px rgba(21,128,61,0.25)' }}>
+          {loading ? 'Signing in…' : <><KeyRound size={18} /> Sign In</>}
+        </button>
+      </form>
+
+      <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+        <p style={{ fontSize: 13, color: '#64748b', textAlign: 'center' }}>
+          No registration available for this role. If you are an admin and cannot log in, contact system support.
         </p>
         <button type="button" onClick={onBack} style={backBtn}>← Back to role selection</button>
       </div>
@@ -380,9 +433,10 @@ export default function AuthPage() {
         <div style={{ width: '100%', background: '#fff', borderRadius: 28, padding: '40px 36px',
           boxShadow: '0 20px 80px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
           <AnimatePresence mode="wait">
-            {screen === 'choose'           && <ChooseScreen onTeacher={() => goTo('teacher-login')} onStudent={() => navigate('/survey/student')} />}
+            {screen === 'choose'           && <ChooseScreen onTeacher={() => goTo('teacher-login')} onStudent={() => navigate('/survey/student')} onAdmin={() => goTo('admin-login')} />}
             {screen === 'teacher-login'    && <TeacherLoginScreen email={email} setEmail={setEmail} password={password} setPassword={setPassword} error={error} success={success} loading={loading} onSubmit={handleLogin} onRegister={() => goTo('teacher-register')} onBack={() => goTo('choose')} />}
             {screen === 'teacher-register' && <TeacherRegisterScreen name={name} setName={setName} email={email} setEmail={setEmail} password={password} setPassword={setPassword} confirmPw={confirmPw} setConfirmPw={setConfirmPw} error={error} loading={loading} onSubmit={handleRegister} onLogin={() => goTo('teacher-login')} onBack={() => goTo('choose')} />}
+            {screen === 'admin-login'      && <AdminLoginScreen email={email} setEmail={setEmail} password={password} setPassword={setPassword} error={error} success={success} loading={loading} onSubmit={handleLogin} onBack={() => goTo('choose')} />}
           </AnimatePresence>
         </div>
 

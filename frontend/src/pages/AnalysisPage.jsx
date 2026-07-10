@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Database, Settings2, BarChart3, Zap, History } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Switch } from "../components/ui/switch";
@@ -53,10 +53,22 @@ const AnalysisPage = () => {
   const [numericColumns, setNumericColumns] = useState([]);
   const [variance, setVariance] = useState(95);
 
-  const [analysisType, setAnalysisType] = useState(() => {
-    return sessionStorage.getItem('analysis_type') || "";
-  });
+  const analysisTypeRaw = sessionStorage.getItem('analysis_type') || "";
+  const [analysisType, setAnalysisType] = useState(analysisTypeRaw);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // On mount, check if there's a datasetId in the URL
+  React.useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const qsDatasetId = params.get('datasetId');
+    if (qsDatasetId) {
+      setSelectedDataset(qsDatasetId);
+      setStep(2); // Jump straight to step 2
+      sessionStorage.setItem('analysis_selected_dataset', qsDatasetId);
+      sessionStorage.setItem('analysis_step', 2);
+    }
+  }, [location.search]);
 
   // Compute table data and columns for dataset preview
   const tableData = React.useMemo(() => {
@@ -141,7 +153,11 @@ const AnalysisPage = () => {
         setDatasets(sorted.slice(0, 5));
 
         // Auto-select latest dataset if none is selected
-        if (!sessionStorage.getItem('analysis_selected_dataset') && sorted.length > 0) {
+        const params = new URLSearchParams(location.search);
+        const qsDatasetId = params.get('datasetId');
+        if (qsDatasetId) {
+          // Handled by the other useEffect
+        } else if (!sessionStorage.getItem('analysis_selected_dataset') && sorted.length > 0) {
           setSelectedDataset(sorted[0].id.toString());
         }
       } catch (err) {
@@ -245,6 +261,11 @@ const AnalysisPage = () => {
       payload = {
         data: selected.cleaned_data,
       };
+    }
+
+    if (!url) {
+      alert("Please select and configure your analysis type in the steps below before running the analysis.");
+      return;
     }
 
     try {

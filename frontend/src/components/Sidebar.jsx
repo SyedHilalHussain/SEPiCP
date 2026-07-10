@@ -23,12 +23,13 @@ const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true); // Default to collapsed (icon-only)
 
-  const menuItems = [
+    const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['student', 'admin'] },
     { icon: Upload, label: 'Upload Data', path: '/upload', roles: ['student', 'admin'] },
     { icon: BarChart3, label: 'Analysis', path: '/analysis', roles: ['student', 'admin'] },
     { icon: FileText, label: 'Results', path: '/results', roles: ['student', 'admin'] },
     { icon: History, label: 'History', path: '/history', roles: ['student', 'admin'] },
+    { icon: Database, label: 'Responses', path: '/responses', roles: ['admin'] },
     { icon: Users, label: 'Admin Panel', path: '/admin', roles: ['admin'] },
   ];
 
@@ -67,7 +68,7 @@ const Sidebar = () => {
         </div>
       </div>
 
-      <nav className="flex-1 px-4 py-4 space-y-2">
+      <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto custom-scrollbar">
         {!isCollapsed && (
           <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 animate-in fade-in">Main Menu</p>
         )}
@@ -79,8 +80,8 @@ const Sidebar = () => {
               to={item.path}
               onClick={() => setIsOpen(false)}
               className={cn(
-                "flex items-center rounded-xl transition-all font-bold text-[13px] group relative",
-                isCollapsed ? "justify-center w-12 h-12 mx-auto" : "gap-3 px-4 py-2.5",
+                "flex items-center rounded-xl transition-all font-bold text-[12px] group relative",
+                isCollapsed ? "justify-center w-10 h-10 mx-auto" : "gap-3 px-3 py-2",
                 location.pathname === item.path
                   ? "bg-blue-50 text-[#1e3a8a]"
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
@@ -198,7 +199,7 @@ const Sidebar = () => {
       <aside 
         className={cn(
           "hidden lg:flex flex-col h-[calc(100vh-2rem)] my-4 ml-4 bg-white border border-slate-200/80 rounded-[28px] shadow-sm z-50 transition-all duration-300 shrink-0 overflow-hidden sticky top-4",
-          isCollapsed ? "w-20" : "w-64"
+          isCollapsed ? "w-20" : "w-56"
         )}
         onMouseEnter={() => setIsCollapsed(false)}
         onMouseLeave={() => setIsCollapsed(true)}
@@ -212,7 +213,7 @@ const Sidebar = () => {
       )} onClick={() => setIsOpen(false)} />
 
       <aside className={cn(
-        "fixed inset-y-0 left-0 w-64 bg-white z-60 shadow-2xl transition-transform lg:hidden flex flex-col",
+        "fixed inset-y-0 left-0 w-56 bg-white z-60 shadow-2xl transition-transform lg:hidden flex flex-col",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <SidebarContent />

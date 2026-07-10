@@ -25,68 +25,71 @@ export default function TeacherDashboard() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
-        <div style={{ color: '#64748b', fontSize: 15, fontWeight: 600 }}>Loading dashboard…</div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-slate-500 text-[15px] font-semibold">Loading dashboard…</div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 20px', background: '#f8fafc', minHeight: '100vh' }}>
-      <h1 style={{ fontSize: 28, fontWeight: 900, color: '#0f172a', marginBottom: 32 }}>My Courses Dashboard</h1>
+    <div className="max-w-4xl mx-auto px-4 py-10 bg-slate-50 min-h-screen">
+      <h1 className="text-3xl font-black text-slate-900 mb-8">My Courses Dashboard</h1>
 
       {data?.courses?.map(course => (
-        <div key={course.id} style={{ background: '#fff', borderRadius: 20,
-          padding: 28, marginBottom: 20, border: '1px solid #e2e8f0' }}>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+        <div key={course.id} className="bg-white rounded-[20px] p-7 mb-5 border border-slate-200 shadow-sm">
+          
+          <div className="flex justify-between items-start flex-wrap gap-4">
             <div>
-              <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1e3a8a', margin: '0 0 8px 0' }}>{course.course_name}</h2>
-              <p style={{ margin: 0, color: '#64748b', fontSize: 14 }}>{course.semester}</p>
+              <h2 className="text-xl font-extrabold text-[#1e3a8a] m-0 mb-2">{course.course_name}</h2>
+              <p className="m-0 text-slate-500 text-sm">{course.semester}</p>
             </div>
             
-            <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 12, padding: '12px 16px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#0369a1', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+            <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 flex flex-col items-end shrink-0">
+              <div className="text-[11px] font-extrabold text-sky-700 uppercase tracking-widest mb-1">
                 Student Course Code
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <code style={{ fontSize: 18, fontWeight: 900, color: '#0f172a', letterSpacing: 2 }}>{course.course_code}</code>
+              <div className="flex items-center gap-2.5">
+                <code className="text-lg font-black text-slate-900 tracking-widest">{course.course_code}</code>
                 <button onClick={() => handleCopy(course.course_code)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: copiedCode === course.course_code ? '#16a34a' : '#0ea5e9', display: 'flex', alignItems: 'center' }}>
+                  className={`bg-transparent border-none cursor-pointer flex items-center transition-colors ${copiedCode === course.course_code ? 'text-green-600' : 'text-sky-500 hover:text-sky-600'}`}>
                   {copiedCode === course.course_code ? <CheckCircle size={18} /> : <Copy size={18} />}
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Stats row */}
-          <div style={{ display: 'flex', gap: 20, marginTop: 24, flexWrap: 'wrap' }}>
-            <Stat icon={Users}    label="Total Responses"     value={course.total_responses} />
-            <Stat icon={TrendingUp} label="Published"         value={course.published_responses} />
-            <Stat icon={BookOpen}  label="Saved (Draft)"      value={course.saved_responses} />
-            <Stat icon={BarChart3} label="Avg Engagement"     value={course.avg_engagement ?? '—'} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+            <div className="flex items-center gap-4 bg-slate-50 rounded-xl p-4">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                <Users size={20} className="text-blue-600" />
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Responses</div>
+                <div className="text-xl font-black text-slate-800">
+                  {course.published_count} <span className="text-sm font-semibold text-slate-400">/ {course.student_count || 0}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 bg-slate-50 rounded-xl p-4">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                <TrendingUp size={20} className="text-emerald-600" />
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Avg Engagement</div>
+                <div className="text-xl font-black text-slate-800">
+                  {course.avg_engagement ? course.avg_engagement.toFixed(1) : '-'} <span className="text-sm font-semibold text-slate-400">/ 10</span>
+                </div>
+              </div>
+            </div>
           </div>
+          
         </div>
       ))}
-
-      {data?.courses?.length === 0 && (
-        <div style={{ background: '#fff', borderRadius: 20, padding: 40, textAlign: 'center', border: '1px solid #e2e8f0' }}>
-          <p style={{ color: '#64748b', fontSize: 16 }}>No student responses yet for your courses.</p>
+      {(!data?.courses || data.courses.length === 0) && (
+        <div className="text-center py-10 text-slate-500">
+          No courses found. Go back and create a survey first!
         </div>
       )}
-    </div>
-  );
-}
-
-function Stat({ icon: Icon, label, value }) {
-  return (
-    <div style={{ flex: '1 1 200px', background: '#f8fafc', borderRadius: 14,
-      padding: '16px 20px', border: '1px solid #e2e8f0' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Icon size={18} color="#1e3a8a" />
-        <div style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>{label}</div>
-      </div>
-      <div style={{ fontSize: 28, fontWeight: 900, marginTop: 12, color: '#0f172a' }}>{value}</div>
     </div>
   );
 }

@@ -104,3 +104,32 @@ export async function getAllSurveysAdmin() {
   if (!res.ok) throw json;
   return json;
 }
+
+export async function exportAdminSurveysExcel(type) {
+  const res = await fetch(`${BASE}/admin/surveys/export/?type=${type}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const json = await res.json();
+    throw json;
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${type}_responses.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function convertAdminSurveysToDataset(type) {
+  const res = await fetch(`${BASE}/admin/surveys/to-dataset/?type=${type}`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  const json = await res.json();
+  if (!res.ok) throw json;
+  return json;
+}

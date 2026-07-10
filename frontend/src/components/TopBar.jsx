@@ -136,16 +136,17 @@ const TopBar = () => {
     // Navigation pipeline configuration
     const steps = [
         { label: 'Dashboard', path: '/', icon: LayoutDashboard },
+        { label: 'Responses', path: '/responses', icon: Database, roles: ['admin'] },
         { label: 'Upload Data', path: '/upload', icon: Upload },
         { label: 'Analysis', path: '/analysis', icon: BarChart3 },
         { label: 'Results', path: '/results', icon: FileText },
         { label: 'History', path: '/history', icon: History }
-    ];
+    ].filter(s => !s.roles || s.roles.includes(user?.role));
 
     const currentStepIdx = steps.findIndex(s => s.path === location.pathname);
 
     return (
-        <header className="h-16 flex items-center justify-between px-6 mx-4 md:mx-8 lg:mx-10 mt-4 mb-2 rounded-2xl border border-slate-200/50 bg-white/75 backdrop-blur-md shadow-[0_8px_30px_rgb(0,0,0,0.02)] z-40 transition-all shrink-0">
+        <header className="w-full h-auto min-h-16 flex flex-wrap items-center justify-between px-4 sm:px-6 lg:px-10 py-3 rounded-none border-b border-slate-200/50 bg-white/75 backdrop-blur-md shadow-[0_8px_30px_rgb(0,0,0,0.02)] z-40 transition-all shrink-0">
             {/* Sequential Navigation Steps */}
             {!location.pathname.startsWith('/teacher') && (
                 <nav className="flex items-center gap-1 ml-12 lg:ml-0">

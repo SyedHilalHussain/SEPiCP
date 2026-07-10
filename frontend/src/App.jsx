@@ -14,6 +14,7 @@ import InstructorSurveyPage from './pages/InstructorSurveyPage';
 import StudentSurveyPage from './pages/StudentSurveyPage';
 import TeacherHome from './pages/TeacherHome';
 import TeacherDashboard from './pages/TeacherDashboard';
+import AdminResponses from './pages/AdminResponses';
 import { useAuth } from './context/AuthContext';
 
 const Layout = ({ children }) => {
@@ -33,7 +34,7 @@ const Layout = ({ children }) => {
               }}
             />
           </div>
-          <div className="max-w-[1400px] mx-auto relative z-10">
+          <div className="w-full max-w-screen-2xl mx-auto relative z-10">
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}
@@ -85,6 +86,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Layout><Dashboard /></Layout>} />
         <Route path="/admin" element={<Layout><AdminPanel /></Layout>} />
+        <Route path="/responses" element={<Layout><AdminResponses /></Layout>} />
         <Route path="/logs" element={<Layout><AdminPanel /></Layout>} />
         <Route path="/upload" element={<Layout><UploadPage /></Layout>} />
         <Route path="/analysis" element={<Layout><AnalysisPage /></Layout>} />

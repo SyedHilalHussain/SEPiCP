@@ -92,6 +92,8 @@ export const AuthProvider = ({ children }) => {
 
     // JWT login — fetch profile to get role
     try {
+      console.log("Login Payload Sent:", { email, password });
+      
       const tokenRes = await fetch("http://127.0.0.1:8080/api/login/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -110,8 +112,7 @@ export const AuthProvider = ({ children }) => {
       });
       const profileData = await profileRes.json();
 
-      const userRole = profileData.role ||
-        (profileData.is_superuser ? 'admin' : 'student');
+      const userRole = profileData.is_superuser ? 'admin' : (profileData.role || 'student');
 
       const loggedInUser = {
         id:    profileData.id,

@@ -73,22 +73,44 @@ const UploadPage = () => {
 
   try {
     setLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    console.log("Uploading file:", file.name, "Size:", file.size);
-    const response = await fetch(
-      apiUrl("/datasets/upload/"),
-      {
+    let response;
+
+    if (file && file.size === 'DB') {
+      // Data was loaded from DB (Responses tab), send as JSON
+      
+      // GUARANTEE WE SEND THE DATA BY READING DIRECTLY FROM SESSIONSTORAGE!
+      const currentTableData = JSON.parse(sessionStorage.getItem('uploaded_table_data') || '[]');
+      console.log("Sending JSON data length:", currentTableData.length);
+      
+      response = await fetch(apiUrl("/datasets/upload/"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("access")}`,
+        },
+        body: JSON.stringify({ data: currentTableData }),
+      });
+    } else {
+      // Normal file upload
+      const formData = new FormData();
+      formData.append("file", file);
+      console.log("Uploading file:", file.name, "Size:", file.size);
+      
+      response = await fetch(apiUrl("/datasets/upload/"), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("access")}`,
         },
-        body: formData, // ❗ no JSON
-      }
-    );
+        body: formData,
+      });
+    }
 
     const result = await response.json();
     console.log("Backend response:", result);
+
+    if (!response.ok) {
+      throw new Error(result.error || "Upload failed");
+    }
 
     const cleaned = result.cleaned_data || [];
     setTableData(cleaned);
