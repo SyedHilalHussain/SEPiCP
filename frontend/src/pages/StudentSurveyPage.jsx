@@ -201,6 +201,31 @@ export default function StudentSurveyPage() {
     }
   };
 
+  // Background Auto-Save for student drafts
+  const autoSaveDraft = async () => {
+    try {
+      let result;
+      // If the student loaded an existing draft, or we already created a draft in a previous step:
+      if (isEditing || editToken) {
+        result = await updateStudentSurvey(editToken, {
+          ...formData,
+          publish: false,
+        });
+      } else {
+        // Create a new draft survey record in the DB
+        result = await submitStudentSurvey({
+          ...formData,
+          course_code: courseCode.trim().toUpperCase(),
+          publish: false,
+        });
+        // Save the returned editToken in state so subsequent sections update the same record
+        setEditToken(result.edit_token);
+      }
+    } catch (err) {
+      console.warn("Background auto-save failed:", err);
+    }
+  };
+
   // Step 3 — validate then submit
   const handleSubmit = async (publish = false) => {
     setApiError('');
@@ -653,6 +678,7 @@ export default function StudentSurveyPage() {
 
           {activeSectionIdx < STUDENT_SECTIONS.length - 1 ? (
             <button
+              type="button"
               onClick={() => {
                 const section = STUDENT_SECTIONS[activeSectionIdx];
                 const sectionFields = STUDENT_FIELDS.filter(f => f.section === section);
@@ -661,6 +687,10 @@ export default function StudentSurveyPage() {
                   setErrors(prev => ({ ...prev, ...sectionErrors }));
                   return;
                 }
+
+                // TRIGGER BACKGROUND AUTO-SAVE
+                autoSaveDraft();
+
                 setActiveSectionIdx(prev => prev + 1);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}

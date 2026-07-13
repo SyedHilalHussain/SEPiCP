@@ -509,17 +509,6 @@ class AdminSurveyDetailView(APIView):
             'students_drafts': StudentSurveySerializer(student_responses.filter(is_published=False), many=True).data,
         })
 
-    """GET — admin sees all instructor surveys with student response counts."""
-    permission_classes = [IsAdminUser]
-
-    def get(self, request):
-        surveys = InstructorSurvey.objects.all().order_by('-created_at')
-        data = []
-        for s in surveys:
-            row = InstructorSurveySerializer(s).data
-            row['student_response_count'] = s.student_surveys.count()
-            data.append(row)
-        return Response(data)
 
 import pandas as pd
 import io
