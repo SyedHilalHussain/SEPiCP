@@ -183,7 +183,7 @@ export default function InstructorSurveyPage() {
     const newErrors = validateForm(INSTRUCTOR_FIELDS, formData);
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      
+
       // Auto-jump to the first section that contains an error
       const firstErrorFieldName = Object.keys(newErrors)[0];
       const errorField = INSTRUCTOR_FIELDS.find(f => f.name === firstErrorFieldName);
