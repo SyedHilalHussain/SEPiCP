@@ -1,6 +1,8 @@
 # from django.shortcuts import render
 # from rest_framework.decorators import api_view
+# pyrefly: ignore [missing-import]
 from rest_framework import generics, permissions
+# pyrefly: ignore [missing-import]
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
@@ -257,6 +259,7 @@ class TeacherDashboardView(APIView):
             saved      = responses.filter(is_published=False).count()
 
             # Example aggregated stats (add more as needed)
+            # pyrefly: ignore [missing-import]
             from django.db.models import Avg
             avg_engage = responses.aggregate(
                 avg=Avg('total_engage_score_s')
@@ -359,6 +362,7 @@ class StudentSurveyLookupView(APIView):
             'course_name':    survey.q4_course,
             'department':     survey.q2_university,
             'semester':       survey.q3_semester,
+            'year':           survey.year,
         })
 
 
@@ -381,6 +385,22 @@ class StudentSurveySubmitView(APIView):
         data = {k: v for k, v in request.data.items() if k != 'course_code'}
         data['instructor_survey'] = instructor_survey.id
         data['is_published']      = is_publishing
+
+        # Copy metadata fields from instructor survey
+        data['q1_name'] = ""
+        data['q108_email'] = ""
+        data['q2_university'] = instructor_survey.q2_university
+        data['q109_location'] = instructor_survey.q109_location
+        data['q3_semester'] = instructor_survey.q3_semester
+        data['q3_4_text'] = instructor_survey.q3_4_text
+        data['q4_course'] = instructor_survey.q4_course
+        data['q111_degree_level'] = instructor_survey.q111_degree_level
+        data['q104_student_count'] = instructor_survey.q104_student_count
+        data['q105_class_format'] = instructor_survey.q105_class_format
+        data['q107_1_online_pct'] = instructor_survey.q107_1_online_pct
+        data['q6_2_text'] = instructor_survey.q1_name  # professor name
+        data['q6_role'] = 'Student'
+        data['year'] = instructor_survey.year
 
         serializer = StudentSurveySerializer(data=data)
         if serializer.is_valid():
@@ -435,6 +455,60 @@ class StudentSurveyEditView(APIView):
 
 
 class AdminSurveyListView(APIView):
+    """GET — admin sees all surveys grouped by teacher with completion metrics."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        surveys = InstructorSurvey.objects.select_related('teacher').all().order_by('-created_at')
+        
+        teachers_map = {}
+        for s in surveys:
+            t = s.teacher
+            t_id = t.id
+            if t_id not in teachers_map:
+                teachers_map[t_id] = {
+                    'teacher_id': t_id,
+                    'teacher_email': t.email,
+                    'teacher_name': s.q1_name or t.username,
+                    'surveys': []
+                }
+            
+            completed_students = s.student_surveys.filter(is_published=True).count()
+            uncompleted_students = s.student_surveys.filter(is_published=False).count()
+            
+            teachers_map[t_id]['surveys'].append({
+                'id': s.id,
+                'course_code': s.course_code,
+                'course_name': s.q4_course or 'Unnamed Course',
+                'semester': s.q3_semester,
+                'year': getattr(s, 'year', ''),
+                'status': s.status,
+                'instructor_completed': s.status == InstructorSurvey.STATUS_PUBLISHED,
+                'completed_student_count': completed_students,
+                'uncompleted_student_count': uncompleted_students
+            })
+            
+        return Response(list(teachers_map.values()))
+
+
+class AdminSurveyDetailView(APIView):
+    """GET — Retrieve complete instructor survey answers and listing of student responses."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, pk):
+        try:
+            survey = InstructorSurvey.objects.select_related('teacher').get(pk=pk)
+        except InstructorSurvey.DoesNotExist:
+            return Response({'error': 'Survey not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        student_responses = survey.student_surveys.all().order_by('-submitted_at')
+        
+        return Response({
+            'instructor_survey': InstructorSurveySerializer(survey).data,
+            'students_completed': StudentSurveySerializer(student_responses.filter(is_published=True), many=True).data,
+            'students_drafts': StudentSurveySerializer(student_responses.filter(is_published=False), many=True).data,
+        })
+
     """GET — admin sees all instructor surveys with student response counts."""
     permission_classes = [IsAdminUser]
 
@@ -449,6 +523,7 @@ class AdminSurveyListView(APIView):
 
 import pandas as pd
 import io
+# pyrefly: ignore [missing-import]
 from django.http import HttpResponse
 
 class AdminSurveyExportView(APIView):
@@ -456,85 +531,92 @@ class AdminSurveyExportView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        export_type = request.GET.get('type')
-        
-        if export_type == 'instructor':
-            data = InstructorSurvey.objects.filter(status='published').values()
-            df = pd.DataFrame(list(data))
-            if df.empty:
-                df = pd.DataFrame(columns=["id", "teacher_id", "course_code"])
-            filename = 'instructor_responses.xlsx'
-            sheet = 'Instructors'
-        elif export_type == 'student':
-            data = StudentSurvey.objects.filter(is_published=True).values()
-            df = pd.DataFrame(list(data))
-            if df.empty:
-                df = pd.DataFrame(columns=["id", "course_code"])
-            filename = 'student_responses.xlsx'
-            sheet = 'Students'
-        else:
-            from rest_framework.response import Response
-            return Response({"error": "Invalid or missing type parameter"}, status=400)
+        try:
+            export_type = request.GET.get('type')
+            
+            if export_type == 'instructor':
+                data = InstructorSurvey.objects.filter(status='published').values()
+                df = pd.DataFrame(list(data))
+                if df.empty:
+                    df = pd.DataFrame(columns=["id", "teacher_id", "course_code"])
+                filename = 'instructor_responses.xlsx'
+                sheet = 'Instructors'
+            elif export_type == 'student':
+                data = StudentSurvey.objects.filter(is_published=True).values()
+                df = pd.DataFrame(list(data))
+                if df.empty:
+                    df = pd.DataFrame(columns=["id", "course_code"])
+                filename = 'student_responses.xlsx'
+                sheet = 'Students'
+            else:
+                return Response({"error": "Invalid or missing type parameter"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Convert timezone-aware datetimes to timezone-unaware
-        for col in df.columns:
-            if pd.api.types.is_datetime64_any_dtype(df[col]):
-                df[col] = df[col].dt.tz_localize(None)
+            # Convert timezone-aware datetimes to timezone-unaware
+            for col in df.columns:
+                if pd.api.types.is_datetime64_any_dtype(df[col]):
+                    df[col] = df[col].dt.tz_localize(None)
 
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name=sheet, index=False)
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name=sheet, index=False)
 
-        buffer.seek(0)
-        
-        response = HttpResponse(
-            buffer.read(),
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
+            buffer.seek(0)
+            
+            response = HttpResponse(
+                buffer.read(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to export surveys: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class AdminSurveyToDatasetView(APIView):
     """POST — Retrieve surveys as raw data to populate the Upload table."""
     permission_classes = [IsAdminUser]
 
     def post(self, request):
-        convert_type = request.GET.get('type')
-        if not convert_type:
-            from rest_framework.response import Response
-            return Response({"error": "Missing type parameter"}, status=400)
+        try:
+            convert_type = request.GET.get('type')
+            if not convert_type:
+                return Response({"error": "Missing type parameter"}, status=status.HTTP_400_BAD_REQUEST)
+                
+            dataset = None
             
-        dataset = None
-        
-        if convert_type == 'instructor':
-            instructors = InstructorSurvey.objects.filter(status='published').values()
-            df = pd.DataFrame(list(instructors))
-            name = "Instructor Responses (Auto-Generated)"
-            desc = "Imported from published instructor surveys."
-        elif convert_type == 'student':
-            students = StudentSurvey.objects.filter(is_published=True).values()
-            df = pd.DataFrame(list(students))
-            name = "Student Responses (Auto-Generated)"
-            desc = "Imported from published student surveys."
-        else:
-            from rest_framework.response import Response
-            return Response({"error": "Invalid type parameter"}, status=400)
+            if convert_type == 'instructor':
+                instructors = InstructorSurvey.objects.filter(status='published').values()
+                df = pd.DataFrame(list(instructors))
+                name = "Instructor Responses (Auto-Generated)"
+                desc = "Imported from published instructor surveys."
+            elif convert_type == 'student':
+                students = StudentSurvey.objects.filter(is_published=True).values()
+                df = pd.DataFrame(list(students))
+                name = "Student Responses (Auto-Generated)"
+                desc = "Imported from published student surveys."
+            else:
+                return Response({"error": "Invalid type parameter"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if df.empty:
-            from rest_framework.response import Response
-            return Response({"error": "No data found for the selected survey type"}, status=404)
+            if df.empty:
+                return Response({"error": "No data found for the selected survey type"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Convert datetimes
-        for col in df.columns:
-            if pd.api.types.is_datetime64_any_dtype(df[col]):
-                df[col] = df[col].astype(str)
+            # Convert datetimes
+            for col in df.columns:
+                if pd.api.types.is_datetime64_any_dtype(df[col]):
+                    df[col] = df[col].astype(str)
 
-        data_dict = df.to_dict(orient='records')
-        
-        from rest_framework.response import Response
-        return Response({
-            "message": f"{name} retrieved successfully.",
-            "data": data_dict,
-            "columns": list(df.columns),
-            "name": name
-        })
+            data_dict = df.to_dict(orient='records')
+            
+            return Response({
+                "message": f"{name} retrieved successfully.",
+                "data": data_dict,
+                "columns": list(df.columns),
+                "name": name
+            })
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to retrieve survey dataset: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

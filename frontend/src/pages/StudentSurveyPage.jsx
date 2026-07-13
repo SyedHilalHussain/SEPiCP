@@ -132,6 +132,7 @@ export default function StudentSurveyPage() {
   const [copied, setCopied]         = useState(false);
   const [editTokenInput, setEditTokenInput] = useState('');
   const [isEditing, setIsEditing]   = useState(false);
+  const [activeSectionIdx, setActiveSectionIdx] = useState(0);
 
   const initialState = generateDummyData(STUDENT_FIELDS);
   const [formData, setFormData] = useState(initialState);
@@ -160,6 +161,7 @@ export default function StudentSurveyPage() {
       const info = await lookupCourseCode(courseCode.trim().toUpperCase());
       setCourseInfo(info);
       setStep('confirm');
+      setActiveSectionIdx(0);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       setApiError(err.error || 'Invalid or unpublished course code. Check with your instructor.');
@@ -183,13 +185,14 @@ export default function StudentSurveyPage() {
       }
       setFormData(loadedData);
       setCourseInfo({
-        course_name: 'Existing Course',
-        instructor_name: 'Instructor',
+        course_name: data.course_name || 'Existing Course',
+        instructor_name: data.instructor_name || 'Instructor',
       });
       setCourseCode(data.course_code || ''); 
       setEditToken(editTokenInput.trim());
       setIsEditing(true);
       setStep('fill');
+      setActiveSectionIdx(0);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       setApiError(err.error || 'Invalid or expired edit token, or response is already published.');
@@ -205,6 +208,17 @@ export default function StudentSurveyPage() {
     const newErrors = validateForm(STUDENT_FIELDS, formData);
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      
+      // Auto-jump to the first section that contains an error
+      const firstErrorFieldName = Object.keys(newErrors)[0];
+      const errorField = STUDENT_FIELDS.find(f => f.name === firstErrorFieldName);
+      if (errorField) {
+        const errorSectionIdx = STUDENT_SECTIONS.indexOf(errorField.section);
+        if (errorSectionIdx !== -1) {
+          setActiveSectionIdx(errorSectionIdx);
+        }
+      }
+
       setTimeout(() => {
         const el = document.querySelector('[data-field-error="true"]');
         el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -430,7 +444,6 @@ export default function StudentSurveyPage() {
     );
   }
 
-  // ── STEP: FILL ─────────────────────────────────────────────────────────────
   if (step === 'fill') {
     const required     = STUDENT_FIELDS.filter(f => f.required);
     const filled       = required.filter(f => formData[f.name] !== '').length;
@@ -441,7 +454,13 @@ export default function StudentSurveyPage() {
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 20px 100px' }}>
         {/* Header */}
         <div style={{ marginBottom: 32, paddingTop: 40 }}>
-          <button onClick={() => setStep('confirm')}
+          <button onClick={() => {
+            if (activeSectionIdx > 0) {
+              setActiveSectionIdx(prev => prev - 1);
+            } else {
+              setStep('confirm');
+            }
+          }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none',
               border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14,
               fontWeight: 600, marginBottom: 20 }}>
@@ -466,8 +485,10 @@ export default function StudentSurveyPage() {
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between',
               fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>
-              <span>Required fields</span>
-              <span>{filled} / {required.length}</span>
+              <span style={{ fontWeight: 700, color: '#1e3a8a' }}>
+                Section {activeSectionIdx + 1} of {STUDENT_SECTIONS.length}: {STUDENT_SECTIONS[activeSectionIdx]}
+              </span>
+              <span>{filled} / {required.length} required fields filled ({pct}%)</span>
             </div>
             <div style={{ height: 6, background: '#e2e8f0', borderRadius: 99 }}>
               <div style={{ height: '100%', width: `${pct}%`,
@@ -501,22 +522,23 @@ export default function StudentSurveyPage() {
                   {errorCount} field{errorCount > 1 ? 's' : ''} need attention
                 </div>
                 <div style={{ color: '#7f1d1d', fontSize: 12 }}>
-                  Fields highlighted in red must be corrected before submitting.
+                  Please check the highlighted fields below.
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Sections */}
-        {STUDENT_SECTIONS.map((section, sIdx) => {
+        {/* Single Paginated Section */}
+        {(() => {
+          const section = STUDENT_SECTIONS[activeSectionIdx];
           const sectionFields   = STUDENT_FIELDS.filter(f => f.section === section);
           const sectionHasError = sectionFields.some(f => errors[f.name]);
+          const sIdx = activeSectionIdx;
 
           return (
             <motion.div key={section}
-              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: sIdx * 0.04 }}
+              initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }}
               style={{
                 background: '#fff', borderRadius: 20, padding: 32, marginBottom: 24,
                 border: sectionHasError ? '1.5px solid #fecaca' : '1px solid #e2e8f0',
@@ -608,42 +630,84 @@ export default function StudentSurveyPage() {
               </div>
             </motion.div>
           );
-        })}
+        })()}
 
-        {/* Sticky submit (Split) */}
-        <div style={{ position: 'sticky', bottom: 24, zIndex: 10,
-          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          
-          <button onClick={() => handleSubmit(false)} disabled={loading || !isFormReady}
-            title={!isFormReady ? `Fill all required fields (${filled}/${required.length} done)` : ''}
+        {/* Wizard Controls */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 24 }}>
+          <button onClick={() => {
+            if (activeSectionIdx > 0) {
+              setActiveSectionIdx(prev => prev - 1);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+              setStep('confirm');
+            }
+          }}
             style={{
-              padding: '16px 32px', borderRadius: 16,
-              background: isFormReady ? '#fff' : '#f1f5f9',
-              color: isFormReady ? '#1e3a8a' : '#94a3b8',
-              border: `2px solid ${isFormReady ? '#1e3a8a' : '#e2e8f0'}`,
-              fontWeight: 900, fontSize: 17,
-              cursor: isFormReady ? 'pointer' : 'not-allowed',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              transition: 'background 0.3s, color 0.3s',
+              padding: '14px 24px', borderRadius: 12, border: '1px solid #e2e8f0',
+              background: '#fff', cursor: 'pointer', fontWeight: 700, color: '#475569',
+              display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'background 0.2s',
             }}>
-            {loading ? 'Saving...' : <><Copy size={20} /> Save (Edit Later)</>}
+            <ArrowLeft size={16} /> Back
           </button>
 
-          <button onClick={() => handleSubmit(true)} disabled={loading || !isFormReady}
-            title={!isFormReady ? `Fill all required fields (${filled}/${required.length} done)` : ''}
-            style={{
-              padding: '16px 32px', borderRadius: 16,
-              background: isFormReady ? '#1e3a8a' : '#cbd5e1',
-              color: isFormReady ? '#fff' : '#94a3b8',
-              border: 'none',
-              fontWeight: 900, fontSize: 17,
-              cursor: isFormReady ? 'pointer' : 'not-allowed',
-              boxShadow: isFormReady ? '0 8px 32px rgba(30,58,138,0.35)' : 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              transition: 'background 0.3s, color 0.3s, box-shadow 0.3s',
-            }}>
-            {loading ? 'Publishing...' : <><CheckCircle size={20} /> Publish (Final)</>}
-          </button>
+          {activeSectionIdx < STUDENT_SECTIONS.length - 1 ? (
+            <button
+              onClick={() => {
+                const section = STUDENT_SECTIONS[activeSectionIdx];
+                const sectionFields = STUDENT_FIELDS.filter(f => f.section === section);
+                const sectionErrors = validateForm(sectionFields, formData);
+                if (Object.keys(sectionErrors).length > 0) {
+                  setErrors(prev => ({ ...prev, ...sectionErrors }));
+                  return;
+                }
+                setActiveSectionIdx(prev => prev + 1);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              style={{
+                padding: '14px 28px', borderRadius: 12, border: 'none',
+                background: '#1e3a8a', color: '#fff', cursor: 'pointer',
+                fontWeight: 700, fontSize: 15,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                transition: 'background 0.2s',
+              }}
+            >
+              Next Section <ChevronRight size={18} />
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => handleSubmit(false)} disabled={loading || !isFormReady}
+                title={!isFormReady ? `Fill all required fields (${filled}/${required.length} done)` : ''}
+                style={{
+                  padding: '14px 24px', borderRadius: 12,
+                  background: isFormReady ? '#fff' : '#f1f5f9',
+                  color: isFormReady ? '#1e3a8a' : '#94a3b8',
+                  border: `2px solid ${isFormReady ? '#1e3a8a' : '#e2e8f0'}`,
+                  fontWeight: 700, fontSize: 15,
+                  cursor: isFormReady ? 'pointer' : 'not-allowed',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  transition: 'background 0.3s, color 0.3s',
+                }}>
+                {loading ? 'Saving...' : <><Copy size={18} /> Save Draft</>}
+              </button>
+
+              <button onClick={() => handleSubmit(true)} disabled={loading || !isFormReady}
+                title={!isFormReady ? `Fill all required fields (${filled}/${required.length} done)` : ''}
+                style={{
+                  padding: '14px 24px', borderRadius: 12,
+                  background: isFormReady ? '#1e3a8a' : '#cbd5e1',
+                  color: isFormReady ? '#fff' : '#94a3b8',
+                  border: 'none',
+                  fontWeight: 700, fontSize: 15,
+                  cursor: isFormReady ? 'pointer' : 'not-allowed',
+                  boxShadow: isFormReady ? '0 4px 16px rgba(30,58,138,0.25)' : 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  transition: 'background 0.3s, color 0.3s, box-shadow 0.3s',
+                }}>
+                {loading ? 'Publishing...' : <><CheckCircle size={18} /> Publish</>}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );

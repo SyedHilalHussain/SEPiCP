@@ -133,3 +133,11 @@ export async function convertAdminSurveysToDataset(type) {
   if (!res.ok) throw json;
   return json;
 }
+export async function getAdminSurveyDetail(surveyId) {
+  const res = await fetch(`${BASE}/admin/surveys/${surveyId}/`, {
+    headers: authHeaders(),
+  });
+  const json = await res.json();
+  if (!res.ok) throw json;
+  return json;
+}

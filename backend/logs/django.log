@@ -1386,3 +1386,83 @@ TypeError: Dataset() got unexpected keyword arguments: 'name', 'description', 'd
 [2026-07-09 22:39:09,642] ERROR django.request: Internal Server Error: /api/analysis/regression/
 [2026-07-10 22:11:28,961] ERROR django.request: Internal Server Error: /api/analysis/regression/
 [2026-07-10 22:13:42,795] ERROR django.request: Internal Server Error: /api/analysis/regression/
+[2026-07-11 00:34:01,301] ERROR django.request: Internal Server Error: /api/analysis/regression/
+[2026-07-11 00:40:11,210] ERROR django.request: Internal Server Error: /api/admin/surveys/export/
+Traceback (most recent call last):
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\views\decorators\csrf.py", line 56, in wrapper_view
+    return view_func(*args, **kwargs)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "D:\antigravity\Ai project\SEPiCP\backend\users\views.py", line 485, in get
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+         ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\pandas\io\excel\_openpyxl.py", line 58, in __init__
+    from openpyxl.workbook import Workbook
+ModuleNotFoundError: No module named 'openpyxl'
+[2026-07-11 00:40:15,728] ERROR django.request: Internal Server Error: /api/admin/surveys/export/
+Traceback (most recent call last):
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\views\decorators\csrf.py", line 56, in wrapper_view
+    return view_func(*args, **kwargs)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "D:\antigravity\Ai project\SEPiCP\backend\users\views.py", line 485, in get
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+         ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\pandas\io\excel\_openpyxl.py", line 58, in __init__
+    from openpyxl.workbook import Workbook
+ModuleNotFoundError: No module named 'openpyxl'
+[2026-07-11 00:40:54,122] ERROR django.request: Internal Server Error: /api/analysis/regression/
+[2026-07-11 00:47:45,002] ERROR django.request: Internal Server Error: /api/admin/surveys/export/
+Traceback (most recent call last):
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\views\decorators\csrf.py", line 56, in wrapper_view
+    return view_func(*args, **kwargs)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "D:\antigravity\Ai project\SEPiCP\backend\users\views.py", line 485, in get
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+         ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\antigravity\Ai project\SEPiCP\backend\venv\Lib\site-packages\pandas\io\excel\_openpyxl.py", line 58, in __init__
+    from openpyxl.workbook import Workbook
+ModuleNotFoundError: No module named 'openpyxl'

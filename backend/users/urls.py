@@ -1,4 +1,6 @@
+# pyrefly: ignore [missing-import]
 from django.urls import path
+# pyrefly: ignore [missing-import]
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 # pyrefly: ignore [missing-import]
@@ -20,6 +22,7 @@ from .views import (
     StudentSurveySubmitView,
     StudentSurveyEditView,
     AdminSurveyListView,
+    AdminSurveyDetailView,
     AdminSurveyExportView,
     AdminSurveyToDatasetView,
     TeacherDashboardView,
@@ -44,6 +47,7 @@ urlpatterns = [
     # ── Admin-only (existing) ─────────────────────────────────────────────────
     path("admin/users/",     AdminUserListView.as_view()),
     path("admin/dashboard/", AdminDashboardView.as_view()),
+    path("admin/surveys/<int:pk>/", AdminSurveyDetailView.as_view()),
 
     # ── Teacher Dashboard ─────────────────────────────────────────────────────
     path("teacher/dashboard/", TeacherDashboardView.as_view()),

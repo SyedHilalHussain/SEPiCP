@@ -1,5 +1,7 @@
 # backend/users/models.py
+# pyrefly: ignore [missing-import]
 from django.contrib.auth.models import AbstractUser
+# pyrefly: ignore [missing-import]
 from django.db import models
 import uuid
 
@@ -78,6 +80,7 @@ class InstructorSurvey(models.Model):
     q109_location        = models.CharField(max_length=300, blank=True)
     q3_semester          = models.CharField(max_length=50, blank=True)   # e.g. "Fall"
     q3_4_text            = models.CharField(max_length=200, blank=True)  # "Other" semester text
+    year                 = models.CharField(max_length=10, blank=True)
     q4_course            = models.CharField(max_length=300, blank=True)
     q111_degree_level    = models.CharField(max_length=100, blank=True)  # "Undergraduate" / "Graduate"
     q104_student_count   = models.IntegerField(null=True, blank=True)
@@ -197,6 +200,7 @@ class StudentSurvey(models.Model):
     q109_location      = models.CharField(max_length=300, blank=True)
     q3_semester        = models.CharField(max_length=50, blank=True)
     q3_4_text          = models.CharField(max_length=200, blank=True)
+    year               = models.CharField(max_length=10, blank=True)
     q4_course          = models.CharField(max_length=300, blank=True)
     q111_degree_level  = models.CharField(max_length=100, blank=True)
     q104_student_count = models.IntegerField(null=True, blank=True)
