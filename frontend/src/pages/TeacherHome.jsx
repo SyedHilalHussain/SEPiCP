@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../lib/api';
 import { motion } from 'framer-motion';
 import {
   BarChart3, ClipboardList, ChevronRight, LogOut,
@@ -22,7 +23,7 @@ export default function TeacherHome() {
       setChecking(false);
       return;
     }
-    fetch('http://127.0.0.1:8080/api/teacher/dashboard/', {
+    fetch(apiUrl('/teacher/dashboard/'), {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
