@@ -208,6 +208,99 @@ const ResultsPage = () => {
               </Card>
             </>
           )}
+          {analysisType === "basic" && (
+            <>
+              {/* Overview Stats */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <Card className="rounded-2xl border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Total Rows
+                  </span>
+                  <p className="text-2xl font-black text-slate-900 mt-3">
+                    {result.total_rows ?? "-"}
+                  </p>
+                </Card>
+                <Card className="rounded-2xl border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Total Columns
+                  </span>
+                  <p className="text-2xl font-black text-slate-900 mt-3">
+                    {result.total_columns ?? "-"}
+                  </p>
+                </Card>
+                <Card className="rounded-2xl border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Features Analyzed
+                  </span>
+                  <p className="text-2xl font-black text-slate-900 mt-3">
+                    {Object.keys(result.columns || {}).length}
+                  </p>
+                </Card>
+              </div>
+
+              {/* Column Statistics Table */}
+              <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
+                <h3 className="text-lg font-black text-slate-900 mb-6">
+                  Descriptive Statistics Summary
+                </h3>
+                <div className="space-y-4">
+                  {Object.entries(result.columns || {}).map(([column, stats]) => (
+                    <div
+                      key={column}
+                      className="rounded-2xl border border-slate-100 p-5 bg-slate-50/50 hover:bg-slate-50 transition-all"
+                    >
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-black text-slate-800 text-sm">{column}</h4>
+                        <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white border text-slate-500 uppercase tracking-wider">
+                          {stats.type}
+                        </span>
+                      </div>
+
+                      {stats.type === "numeric" ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                          <div className="bg-white border p-3 rounded-xl">
+                            <p className="text-[10px] font-black uppercase text-slate-400">Mean</p>
+                            <p className="text-base font-black text-slate-800 mt-1">{stats.mean?.toFixed(2) ?? "N/A"}</p>
+                          </div>
+                          <div className="bg-white border p-3 rounded-xl">
+                            <p className="text-[10px] font-black uppercase text-slate-400">Median</p>
+                            <p className="text-base font-black text-slate-800 mt-1">{stats.median?.toFixed(2) ?? "N/A"}</p>
+                          </div>
+                          <div className="bg-white border p-3 rounded-xl">
+                            <p className="text-[10px] font-black uppercase text-slate-400">Min</p>
+                            <p className="text-base font-black text-slate-800 mt-1">{stats.min?.toFixed(2) ?? "N/A"}</p>
+                          </div>
+                          <div className="bg-white border p-3 rounded-xl">
+                            <p className="text-[10px] font-black uppercase text-slate-400">Max</p>
+                            <p className="text-base font-black text-slate-800 mt-1">{stats.max?.toFixed(2) ?? "N/A"}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                          <div className="bg-white border p-3 rounded-xl">
+                            <p className="text-[10px] font-black uppercase text-slate-400">Unique values</p>
+                            <p className="text-base font-black text-slate-800 mt-1">{stats.unique_count ?? "N/A"}</p>
+                          </div>
+                          <div className="bg-white border p-3 rounded-xl">
+                            <p className="text-[10px] font-black uppercase text-slate-400">Mode</p>
+                            <p className="text-base font-black text-slate-800 mt-1">{stats.mode ?? "N/A"}</p>
+                          </div>
+                          <div className="bg-white border p-3 rounded-xl">
+                            <p className="text-[10px] font-black uppercase text-slate-400">Missing values</p>
+                            <p className="text-base font-black text-slate-800 mt-1">{stats.missing ?? "N/A"}</p>
+                          </div>
+                          <div className="bg-white border p-3 rounded-xl">
+                            <p className="text-[10px] font-black uppercase text-slate-400">Missing %</p>
+                            <p className="text-base font-black text-slate-800 mt-1">{stats.missing_percent}%</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </>
+          )}
 
           {analysisType === "pca" && (
             <>
@@ -371,7 +464,7 @@ const ResultsPage = () => {
                     <div key={idx} className="flex flex-col h-full">
                       <div className="flex items-center justify-between mb-3 px-1">
                         <h4 className="font-black text-slate-800 text-sm">{pc.pc_name} Dominant Variables</h4>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Impact Threshold > 0.30</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Impact Threshold &gt; 0.30</span>
                       </div>
                       
                       <div className="flex-1 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 space-y-2">

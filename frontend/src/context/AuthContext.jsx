@@ -3,25 +3,27 @@ import { apiUrl } from '../lib/api';
 
 const AuthContext = createContext(undefined);
 
-function mapBackendUser(profile) {
-  const displayName =
-    (profile?.username && String(profile.username).trim()) ||
-    (profile?.email && String(profile.email).split('@')[0]) ||
-    'Researcher';
-  return {
-    id: profile?.id,
-    name: displayName,
-    email: profile?.email || '',
-    role: profile?.is_superuser || profile?.is_staff ? 'admin' : 'student',
-    is_staff: !!profile?.is_staff,
-    is_superuser: !!profile?.is_superuser,
-  };
-}
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [registeredUsers, setRegisteredUsers] = useState([]);
   const [activities, setActivities] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('research_user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+
+    const savedUsers = localStorage.getItem('registered_users');
+    if (savedUsers) {
+      setRegisteredUsers(JSON.parse(savedUsers));
+    }
+
+    const savedActivities = localStorage.getItem('research_activities');
+    if (savedActivities) {
+      setActivities(JSON.parse(savedActivities));
+    }
+  }, []);
 
   const logActivity = (type, details, targetUser = null) => {
     const activeUser = targetUser || user;
@@ -32,149 +34,120 @@ export const AuthProvider = ({ children }) => {
       userId: activeUser.id,
       userName: activeUser.name,
       userRole: activeUser.role,
-      type,
+      type, // 'login', 'logout', 'analysis', 'upload'
       details,
       timestamp: new Date().toISOString(),
     };
 
-    setActivities((prev) => {
-      const updated = [newActivity, ...prev];
-      localStorage.setItem('research_activities', JSON.stringify(updated));
-      return updated;
-    });
+    const updatedActivities = [newActivity, ...activities];
+    setActivities(updatedActivities);
+    localStorage.setItem('research_activities', JSON.stringify(updatedActivities));
   };
 
-  const fetchProfile = async (accessToken) => {
-    const response = await fetch(apiUrl('/profile/'), {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data?.detail || 'Failed to fetch profile');
+  const register = (name, email, password) => {
+    if (registeredUsers.find(u => u.email === email)) {
+      return { success: false, message: 'User already exists.' };
     }
-    return mapBackendUser(data);
+
+    const newUser = {
+      id: `stu-${Math.floor(Math.random() * 1000)}`,
+      name,
+      email,
+      password,
+      role: 'student',
+      department: 'Undergraduate Statistics',
+    };
+
+    const updatedUsers = [...registeredUsers, newUser];
+    setRegisteredUsers(updatedUsers);
+    localStorage.setItem('registered_users', JSON.stringify(updatedUsers));
+
+    // Automatically log in after registration
+    setUser(newUser);
+    localStorage.setItem('research_user', JSON.stringify(newUser));
+    localStorage.setItem('research_token', 'student-token-abc');
+    logActivity('login', 'New user registered and logged in', newUser);
+
+    return { success: true };
   };
 
-  const fetchAdminUsers = async (accessToken) => {
-    try {
-      const response = await fetch(apiUrl('/admin/users/'), {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!response.ok) return;
-      const data = await response.json().catch(() => []);
-      const rows = Array.isArray(data) ? data : [];
-      setAllUsers(
-        rows.map((u) => ({
-          id: u.id,
-          name: u.username || (u.email ? String(u.email).split('@')[0] : 'User'),
-          email: u.email,
-          role: u.is_superuser || u.is_staff ? 'admin' : 'student',
-        }))
-      );
-    } catch {
-      // Keep UI functional even if admin list API fails.
-    }
-  };
-
-  const loginWithTokens = async (access, refresh) => {
-    localStorage.setItem('access', access);
-    localStorage.setItem('refresh', refresh);
-    const backendUser = await fetchProfile(access);
-    setUser(backendUser);
-    localStorage.setItem('research_user', JSON.stringify(backendUser));
-    if (backendUser.role === 'admin') {
-      fetchAdminUsers(access);
-    } else {
-      setAllUsers([backendUser]);
-    }
-    logActivity('login', 'User logged in via backend', backendUser);
-    return { success: true, user: backendUser };
-  };
-
-  useEffect(() => {
-    const savedActivities = localStorage.getItem('research_activities');
-    if (savedActivities) {
-      try {
-        setActivities(JSON.parse(savedActivities));
-      } catch {
-        setActivities([]);
+  const login = async (email, password, role) => {
+    // Admin (hardcoded fallback kept for dev convenience)
+    if (role === 'admin' && !localStorage.getItem('access')) {
+      if (email === 'nedscholar@gmail.com' && password === '123456') {
+        const adminUser = {
+          id: 'admin-001',
+          name: 'Principal Administrator',
+          email: 'nedscholar@gmail.com',
+          role: 'admin',
+          department: 'Executive Research Board',
+        };
+        setUser(adminUser);
+        localStorage.setItem('research_user', JSON.stringify(adminUser));
+        localStorage.setItem('research_token', 'admin-token-xyz');
+        logActivity('login', 'Admin logged into dashboard', adminUser);
+        return { success: true };
       }
+      return { success: false, message: 'Invalid administrator credentials.' };
     }
 
-    const access = localStorage.getItem('access');
-    const refresh = localStorage.getItem('refresh');
-    if (!access || !refresh) return;
+    // JWT login — fetch profile to get role
+    try {
+      console.log("Login Payload Sent:", { email, password });
+      
+      const tokenRes = await fetch(apiUrl('/login/'), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok) {
+        return { success: false, message: tokenData.detail || "Login failed." };
+      }
+      localStorage.setItem("access", tokenData.access);
+      localStorage.setItem("refresh", tokenData.refresh);
 
-    loginWithTokens(access, refresh).catch(() => {
-      setUser(null);
-      setAllUsers([]);
-      localStorage.removeItem('access');
-      localStorage.removeItem('refresh');
-      localStorage.removeItem('research_user');
-    });
-  }, []);
+      // Fetch profile to get role
+      const profileRes = await fetch(apiUrl('/profile/'), {
+        headers: { Authorization: `Bearer ${tokenData.access}` },
+      });
+      const profileData = await profileRes.json();
 
-  const register = async (name, email, password) => {
-    const username = String(name || '')
-      .trim()
-      .replace(/\s+/g, '_')
-      .toLowerCase();
+      const userRole = profileData.is_superuser ? 'admin' : (profileData.role || 'student');
 
-    const response = await fetch(apiUrl('/register/'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      return {
-        success: false,
-        message: data?.error || data?.detail || JSON.stringify(data?.errors || {}) || 'Registration failed',
+      const loggedInUser = {
+        id:    profileData.id,
+        name:  profileData.username,
+        email: profileData.email,
+        role:  userRole,
       };
+      setUser(loggedInUser);
+      localStorage.setItem('research_user', JSON.stringify(loggedInUser));
+      logActivity('login', 'User logged in via JWT', loggedInUser);
+      return { success: true };
+    } catch (err) {
+      return { success: false, message: 'Server error. Please try again.' };
     }
-    return { success: true, data };
-  };
-
-  const login = async (email, password) => {
-    const response = await fetch(apiUrl('/login/'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      return {
-        success: false,
-        message: data?.error || data?.detail || JSON.stringify(data?.errors || {}) || 'Login failed',
-      };
-    }
-    return loginWithTokens(data.access, data.refresh);
   };
 
   const logout = () => {
     logActivity('logout', 'User logged out');
     setUser(null);
-    setAllUsers([]);
     localStorage.removeItem('research_user');
     localStorage.removeItem('research_token');
-    localStorage.removeItem('access');
-    localStorage.removeItem('refresh');
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        login,
-        loginWithTokens,
-        register,
-        logout,
-        logActivity,
-        activities,
-        allUsers,
-        isAuthenticated: !!user,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user,
+      login,
+      register,
+      logout,
+      logActivity,
+      activities,
+      allUsers: registeredUsers,
+      isAuthenticated: !!user
+    }}>
       {children}
     </AuthContext.Provider>
   );

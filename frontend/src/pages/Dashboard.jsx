@@ -1,5 +1,6 @@
 import { cn } from '../lib/utils';
-import React from 'react';
+import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     Database,
@@ -30,11 +31,17 @@ import {
 
 const Dashboard = () => {
     const { user, activities, allUsers } = useAuth();
+    
+    // Filter Type state for administrator (Global vs. Personal view)
+    const [filterType, setFilterType] = useState('personal');
 
-    // Data Filtering: Student only sees their own; Admin sees all
-    const displayActivities = user?.role === 'admin'
-        ? activities
-        : activities.filter(a => a.userId === user?.id);
+    // Data Filtering: Admin can toggle Global vs. Personal. Standard researcher only sees Personal.
+    const displayActivities = useMemo(() => {
+        if (user?.role === 'admin' && filterType === 'global') {
+            return activities;
+        }
+        return activities.filter(a => a.userId === user?.id);
+    }, [activities, user, filterType]);
 
     const stats = [
         { label: 'Total Researchers', value: user?.role === 'admin' ? allUsers.length : '1', icon: Users, color: 'blue' },
@@ -44,23 +51,48 @@ const Dashboard = () => {
         { label: 'Your Role', value: user?.role === 'admin' ? 'Administrator' : 'Researcher', icon: Activity, color: 'fuchsia' },
     ];
 
-    const recentActivity = displayActivities.slice(0, 5).map(act => ({
-        id: act.id,
-        type: act.type,
-        title: act.details,
-        time: new Date(act.timestamp).toLocaleTimeString(),
-        status: 'Completed'
-    }));
+    const recentActivity = useMemo(() => {
+        return displayActivities.slice(0, 5).map(act => ({
+            id: act.id,
+            type: act.type,
+            title: act.details,
+            time: new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            userName: act.userName,
+            status: 'Completed'
+        }));
+    }, [displayActivities]);
 
-    const chartData = [
-        { name: 'Mon', value: 400 },
-        { name: 'Tue', value: 300 },
-        { name: 'Wed', value: 600 },
-        { name: 'Thu', value: 800 },
-        { name: 'Fri', value: 500 },
-        { name: 'Sat', value: 900 },
-        { name: 'Sun', value: 700 },
-    ];
+    // Dynamic Chart Data: compute activity counts for the last 7 calendar days
+    const chartData = useMemo(() => {
+        const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        
+        const result = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dayLabel = daysOfWeek[d.getDay()];
+            result.push({
+                name: dayLabel,
+                dateStr: d.toDateString(),
+                value: 0
+            });
+        }
+
+        displayActivities.forEach(act => {
+            try {
+                const actDate = new Date(act.timestamp).toDateString();
+                const match = result.find(r => r.dateStr === actDate);
+                if (match) {
+                    match.value += 1;
+                }
+            } catch (e) {}
+        });
+
+        return result.map(r => ({
+            name: r.name,
+            value: r.value
+        }));
+    }, [displayActivities]);
 
     return (
         <div className="space-y-10 animate-in fade-in duration-500 pb-20">
@@ -75,14 +107,18 @@ const Dashboard = () => {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" className="rounded-xl font-black h-11 px-5 border-slate-200 bg-white text-[11px] uppercase tracking-widest shadow-sm">
-                        <History className="w-4 h-4 mr-2.5 text-slate-400" />
-                        History
-                    </Button>
-                    <Button className="rounded-xl font-black h-11 shadow-lg shadow-blue-900/10 px-6 bg-[#1e3a8a] hover:bg-[#1a337a] text-[11px] uppercase tracking-widest transition-all">
-                        <PlusCircle className="w-4 h-4 mr-2.5" />
-                        New Project
-                    </Button>
+                    <Link to="/history">
+                        <Button variant="outline" className="rounded-xl font-black h-11 px-5 border-slate-200 bg-white text-[11px] uppercase tracking-widest shadow-sm cursor-pointer hover:bg-slate-50">
+                            <History className="w-4 h-4 mr-2.5 text-slate-400" />
+                            History
+                        </Button>
+                    </Link>
+                    <Link to="/upload">
+                        <Button className="rounded-xl font-black h-11 shadow-lg shadow-blue-900/10 px-6 bg-[#1e3a8a] hover:bg-[#1a337a] text-[11px] uppercase tracking-widest transition-all cursor-pointer">
+                            <PlusCircle className="w-4 h-4 mr-2.5" />
+                            New Project
+                        </Button>
+                    </Link>
                 </div>
             </div>
 
@@ -116,15 +152,39 @@ const Dashboard = () => {
                     <CardHeader className="p-0 mb-8 flex flex-row items-center justify-between space-y-0">
                         <div>
                             <CardTitle className="text-xl font-black text-slate-900">Activity Overview</CardTitle>
-                            <CardDescription className="text-slate-500 font-medium">Monthly research data throughput</CardDescription>
+                            <CardDescription className="text-slate-500 font-medium">Research operations throughput (last 7 days)</CardDescription>
                         </div>
                         <div className="flex gap-2">
-                            <Badge variant="outline" className="rounded-lg h-8 px-3 border-slate-200 font-bold text-slate-600 cursor-pointer hover:bg-slate-50">Global</Badge>
-                            <Badge variant="secondary" className="rounded-lg h-8 px-3 font-bold cursor-pointer transition-all" style={{ backgroundColor: theme.colors.primary, color: 'white' }}>Personal</Badge>
+                            <Badge 
+                                variant={filterType === 'global' ? 'default' : 'outline'} 
+                                onClick={() => user?.role === 'admin' && setFilterType('global')}
+                                className={cn(
+                                    "rounded-lg h-8 px-3 font-bold cursor-pointer transition-all select-none",
+                                    filterType === 'global' 
+                                        ? "bg-[#1e3a8a] text-white hover:bg-[#1a337a] border-transparent" 
+                                        : "border-slate-200 text-slate-600 hover:bg-slate-50",
+                                    user?.role !== 'admin' && "opacity-50 cursor-not-allowed"
+                                )}
+                                title={user?.role !== 'admin' ? "Only administrators can view global statistics" : ""}
+                            >
+                                Global
+                            </Badge>
+                            <Badge 
+                                variant={filterType === 'personal' ? 'default' : 'outline'} 
+                                onClick={() => setFilterType('personal')}
+                                className={cn(
+                                    "rounded-lg h-8 px-3 font-bold cursor-pointer transition-all select-none",
+                                    filterType === 'personal' 
+                                        ? "bg-[#1e3a8a] text-white hover:bg-[#1a337a] border-transparent" 
+                                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                                )}
+                            >
+                                Personal
+                            </Badge>
                         </div>
                     </CardHeader>
-                    <div className="h-[350px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ width: '100%', height: 350, minHeight: 350 }}>
+                        <ResponsiveContainer width="100%" height="100%" minHeight={350} minWidth={0}>
                             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
@@ -168,46 +228,64 @@ const Dashboard = () => {
 
                 {/* Recent Activity Card */}
                 <div className="space-y-8">
-                    <Card className="rounded-3xl border-slate-200 shadow-sm p-6 overflow-hidden">
+                    <Card className="rounded-3xl border-slate-200 shadow-sm p-6 overflow-hidden bg-white">
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-2">
                                 <Activity className="w-5 h-5 text-slate-400" />
                                 <h3 className="font-black text-slate-900 uppercase tracking-wider text-sm">Recent Activity</h3>
                             </div>
-                            <Button variant="ghost" size="sm" className="text-xs font-bold text-slate-400 hover:text-blue-600">View All</Button>
+                            <Link to="/history" className="text-xs font-bold text-slate-400 hover:text-blue-650 transition-colors">
+                                View All
+                            </Link>
                         </div>
 
                         <div className="space-y-6">
-                            {recentActivity.map((item, i) => (
-                                <div key={item.id} className="flex gap-4 group">
-                                    <div className={cn(
-                                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                                        item.type === 'upload' ? "bg-amber-50 text-amber-600" :
-                                            item.type === 'analysis' ? "bg-blue-50 text-blue-600" :
-                                                "bg-emerald-50 text-emerald-600"
-                                    )}>
-                                        {item.type === 'upload' ? <Database className="w-5 h-5" /> :
-                                            item.type === 'analysis' ? <BarChart3 className="w-5 h-5" /> :
-                                                <FileText className="w-5 h-5" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">{item.title}</p>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <Clock className="w-3 h-3 text-slate-400" />
-                                            <span className="text-xs text-slate-400 font-medium">{item.time}</span>
+                            {recentActivity.length > 0 ? (
+                                recentActivity.map((item, i) => (
+                                    <div key={item.id} className="flex gap-4 group">
+                                        <div className={cn(
+                                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                                            item.type === 'upload' ? "bg-amber-50 text-amber-600" :
+                                                item.type === 'analysis' ? "bg-blue-50 text-[#1e3a8a]" :
+                                                    "bg-emerald-50 text-emerald-600"
+                                        )}>
+                                            {item.type === 'upload' ? <Database className="w-5 h-5" /> :
+                                                item.type === 'analysis' ? <BarChart3 className="w-5 h-5" /> :
+                                                    <FileText className="w-5 h-5" />}
                                         </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">{item.title}</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Clock className="w-3 h-3 text-slate-400" />
+                                                <span className="text-xs text-slate-400 font-medium">{item.time}</span>
+                                                {filterType === 'global' && item.userName && (
+                                                    <>
+                                                        <span className="w-1 h-1 rounded-full bg-slate-350" />
+                                                        <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                                                            {item.userName}
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <Badge variant={item.status === 'Completed' ? 'success' : 'secondary'} className="h-6 px-2 text-[10px] uppercase font-black tracking-widest leading-none">
+                                            {item.status}
+                                        </Badge>
                                     </div>
-                                    <Badge variant={item.status === 'Completed' ? 'success' : 'secondary'} className="h-6 px-2 text-[10px] uppercase font-black tracking-widest leading-none">
-                                        {item.status}
-                                    </Badge>
+                                ))
+                            ) : (
+                                <div className="py-10 text-center text-slate-400 text-xs">
+                                    No recent activities recorded.
                                 </div>
-                            ))}
+                            )}
                         </div>
 
-                        <Button className="w-full mt-8 h-12 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-900 font-black border border-slate-100 group">
-                            View Audit Logs
-                            <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                        </Button>
+                        <Link to="/history">
+                            <Button className="w-full mt-8 h-12 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-900 font-black border border-slate-100 group cursor-pointer">
+                                View Audit Logs
+                                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                            </Button>
+                        </Link>
                     </Card>
 
                     {/* Quick Actions Card */}

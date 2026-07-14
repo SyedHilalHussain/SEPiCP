@@ -29,8 +29,10 @@ import { useAuth } from '../context/AuthContext';
 const HistoryPage = () => {
   const { user, activities } = useAuth();
 
-  // Filter activities to only show the logged-in user's records
-  const userActivities = activities.filter(act => act.userId === user?.id);
+  // Filter activities: Admin sees all activities, Student sees only their own
+  const userActivities = user?.role === 'admin'
+    ? activities
+    : activities.filter(act => act.userId === user?.id);
 
   return (
     <div className="space-y-12 animate-in fade-in duration-700 pb-20">
@@ -70,6 +72,9 @@ const HistoryPage = () => {
               <TableRow className="bg-slate-50/50 border-b border-slate-100 hover:bg-slate-50/50">
                 <TableHead className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Activity Vector</TableHead>
                 <TableHead className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Event Description</TableHead>
+                {user?.role === 'admin' && (
+                  <TableHead className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Researcher</TableHead>
+                )}
                 <TableHead className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Timestamp</TableHead>
                 <TableHead className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Audit</TableHead>
               </TableRow>
@@ -97,6 +102,13 @@ const HistoryPage = () => {
                     <TableCell className="px-10 py-6">
                       <p className="text-sm font-black text-slate-800 leading-relaxed">{item.details}</p>
                     </TableCell>
+                    {user?.role === 'admin' && (
+                      <TableCell className="px-10 py-6">
+                        <Badge className="bg-blue-50 text-blue-600 border-none font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-lg">
+                          {item.userName || 'User'}
+                        </Badge>
+                      </TableCell>
+                    )}
                     <TableCell className="px-10 py-6 text-sm text-slate-500 font-bold">
                       {new Date(item.timestamp).toLocaleString()}
                     </TableCell>
@@ -109,7 +121,7 @@ const HistoryPage = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-40 text-center text-slate-400 font-medium">
+                  <TableCell colSpan={user?.role === 'admin' ? 5 : 4} className="h-40 text-center text-slate-400 font-medium">
                     No activity records found. Start exploring to generate history!
                   </TableCell>
                 </TableRow>
