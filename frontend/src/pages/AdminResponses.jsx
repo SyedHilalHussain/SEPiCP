@@ -63,6 +63,30 @@ export default function AdminResponses() {
     }
   };
 
+  const handleDownloadCourseExcel = async (courseId, courseCode) => {
+    try {
+      setError('');
+      setSuccess('');
+      const token = localStorage.getItem('access');
+      const res = await fetch(`http://127.0.0.1:8080/api/admin/surveys/export/?course_id=${courseId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `course_${courseCode}_responses.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setSuccess(`Excel file for course ${courseCode} downloaded successfully!`);
+    } catch (err) {
+      setError(`Failed to download Excel file for course ${courseCode}.`);
+    }
+  };
+
   const handleConvertToDataset = async (type) => {
     try {
       setError('');
@@ -235,12 +259,17 @@ export default function AdminResponses() {
                           {survey.semester} {survey.year && `· ${survey.year}`}
                         </td>
                         <td className="p-4">
-                          <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full ${survey.instructor_completed
-                              ? 'bg-emerald-50 text-emerald-600'
-                              : 'bg-amber-50 text-amber-600'
-                            }`}>
-                            {survey.instructor_completed ? 'Published (Completed)' : 'Draft (Incomplete)'}
-                          </span>
+                          {survey.instructor_completed ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                              Green - Instructor Completed
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black rounded-full bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider">
+                              <span className="w-2 h-2 rounded-full bg-rose-500" />
+                              Red - Instructor Incomplete
+                            </span>
+                          )}
                         </td>
                         <td className="p-4">
                           <div className="flex gap-2">
@@ -252,10 +281,16 @@ export default function AdminResponses() {
                             </span>
                           </div>
                         </td>
-                        <td className="p-4 text-right pr-6">
+                        <td className="p-4 text-right pr-6 space-x-2">
+                          <Button
+                            onClick={() => handleDownloadCourseExcel(survey.id, survey.course_code)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold h-9 px-3 transition-all inline-flex items-center gap-1.5 shadow-sm"
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" /> Course Excel
+                          </Button>
                           <Button
                             onClick={() => handleOpenAudit(survey)}
-                            className="bg-[#1e3a8a] hover:bg-[#1a337a] text-white rounded-xl text-xs font-bold h-9 px-4 transition-all"
+                            className="bg-[#1e3a8a] hover:bg-[#1a337a] text-white rounded-xl text-xs font-bold h-9 px-3 transition-all"
                           >
                             View Audit
                           </Button>

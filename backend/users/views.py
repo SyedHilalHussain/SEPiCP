@@ -249,38 +249,41 @@ class TeacherDashboardView(APIView):
         if request.user.role != 'teacher':
             return Response({'error': 'Forbidden'}, status=403)
 
-        surveys = InstructorSurvey.objects.filter(teacher=request.user)
+        surveys = InstructorSurvey.objects.filter(teacher=request.user).order_by('-updated_at')
         data = []
 
         for survey in surveys:
-            # using related_name 'student_surveys' from StudentSurvey model
             responses = survey.student_surveys.all()
             published  = responses.filter(is_published=True).count()
             saved      = responses.filter(is_published=False).count()
 
-            # Example aggregated stats (add more as needed)
-            # pyrefly: ignore [missing-import]
             from django.db.models import Avg
             avg_engage = responses.aggregate(
                 avg=Avg('total_engage_score_s')
             )['avg']
 
             data.append({
-                'id':           survey.id,
-                'course_code':  survey.course_code,
-                'course_name':  survey.q4_course,
-                'semester':     survey.q3_semester,
-                'status':       survey.status,
-                'total_responses':     responses.count(),
-                'published_responses': published,
-                'saved_responses':     saved,
-                'avg_engagement':      round(avg_engage, 2) if avg_engage else None,
+                'id':                   survey.id,
+                'course_code':          survey.course_code,
+                'course_name':          survey.q4_course or 'Unnamed Course',
+                'semester':             f"{survey.q3_semester} {getattr(survey, 'year', '')}".strip(),
+                'status':               survey.status,
+                'is_completed':         survey.status == InstructorSurvey.STATUS_PUBLISHED,
+                'total_responses':      responses.count(),
+                'published_responses':  published,
+                'published_count':      published,
+                'saved_responses':      saved,
+                'avg_engagement':       round(avg_engage, 2) if avg_engage else None,
             })
 
-        # Also tell frontend if teacher has filled any survey at all
         has_survey = surveys.exists()
 
-        return Response({'has_survey': has_survey, 'courses': data})
+        return Response({
+            'has_survey': has_survey,
+            'instructor_name': request.user.username,
+            'instructor_email': request.user.email,
+            'courses': data
+        })
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SURVEY VIEWS
@@ -352,17 +355,17 @@ class StudentSurveyLookupView(APIView):
         if not code:
             return Response({'error': 'course_code is required'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            survey = InstructorSurvey.objects.get(course_code=code, status=InstructorSurvey.STATUS_PUBLISHED)
+            survey = InstructorSurvey.objects.get(course_code=code)
         except InstructorSurvey.DoesNotExist:
-            return Response({'error': 'Invalid or unpublished course code.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Invalid course code. Check with your instructor.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({
-            'survey_id':      survey.id,
-            'course_code':    survey.course_code,
+            'survey_id':       survey.id,
+            'course_code':     survey.course_code,
             'instructor_name': survey.q1_name,
-            'course_name':    survey.q4_course,
-            'department':     survey.q2_university,
-            'semester':       survey.q3_semester,
-            'year':           survey.year,
+            'course_name':     survey.q4_course,
+            'department':      survey.q2_university,
+            'semester':        survey.q3_semester,
+            'year':            getattr(survey, 'year', ''),
         })
 
 
@@ -374,10 +377,10 @@ class StudentSurveySubmitView(APIView):
         course_code = request.data.get('course_code', '').strip().upper()
         try:
             instructor_survey = InstructorSurvey.objects.get(
-                course_code=course_code, status=InstructorSurvey.STATUS_PUBLISHED
+                course_code=course_code
             )
         except InstructorSurvey.DoesNotExist:
-            return Response({'error': 'Invalid or unpublished course code.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Invalid course code. Check with your instructor.'}, status=status.HTTP_404_NOT_FOUND)
 
         is_publishing = request.data.get('publish', False)
 
@@ -389,18 +392,18 @@ class StudentSurveySubmitView(APIView):
         # Copy metadata fields from instructor survey
         data['q1_name'] = ""
         data['q108_email'] = ""
-        data['q2_university'] = instructor_survey.q2_university
-        data['q109_location'] = instructor_survey.q109_location
-        data['q3_semester'] = instructor_survey.q3_semester
-        data['q3_4_text'] = instructor_survey.q3_4_text
-        data['q4_course'] = instructor_survey.q4_course
-        data['q111_degree_level'] = instructor_survey.q111_degree_level
+        data['q2_university'] = instructor_survey.q2_university or ""
+        data['q109_location'] = instructor_survey.q109_location or ""
+        data['q3_semester'] = instructor_survey.q3_semester or ""
+        data['q3_4_text'] = instructor_survey.q3_4_text or ""
+        data['q4_course'] = instructor_survey.q4_course or ""
+        data['q111_degree_level'] = instructor_survey.q111_degree_level or ""
         data['q104_student_count'] = instructor_survey.q104_student_count
-        data['q105_class_format'] = instructor_survey.q105_class_format
+        data['q105_class_format'] = instructor_survey.q105_class_format or ""
         data['q107_1_online_pct'] = instructor_survey.q107_1_online_pct
-        data['q6_2_text'] = instructor_survey.q1_name  # professor name
+        data['q6_2_text'] = instructor_survey.q1_name or ""  # professor name
         data['q6_role'] = 'Student'
-        data['year'] = instructor_survey.year
+        data['year'] = getattr(instructor_survey, 'year', '') or ""
 
         serializer = StudentSurveySerializer(data=data)
         if serializer.is_valid():
@@ -516,13 +519,47 @@ import io
 from django.http import HttpResponse
 
 class AdminSurveyExportView(APIView):
-    """GET — Export all survey responses as an Excel file with two sheets."""
+    """GET — Export all survey responses or specific course responses as an Excel file with distinct sheets."""
     permission_classes = [IsAdminUser]
 
     def get(self, request):
         try:
             export_type = request.GET.get('type')
-            
+            course_id   = request.GET.get('course_id')
+
+            if course_id:
+                survey = InstructorSurvey.objects.get(pk=course_id)
+                student_data = StudentSurvey.objects.filter(instructor_survey=survey, is_published=True).values()
+                
+                df_instructor = pd.DataFrame([InstructorSurveySerializer(survey).data])
+                df_students   = pd.DataFrame(list(student_data))
+
+                filename = f'course_{survey.course_code}_responses.xlsx'
+
+                for col in df_instructor.columns:
+                    if pd.api.types.is_datetime64_any_dtype(df_instructor[col]):
+                        df_instructor[col] = df_instructor[col].astype(str)
+
+                for col in df_students.columns:
+                    if pd.api.types.is_datetime64_any_dtype(df_students[col]):
+                        df_students[col] = df_students[col].astype(str)
+
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    df_instructor.to_excel(writer, sheet_name='Instructor_Evaluation', index=False)
+                    if not df_students.empty:
+                        df_students.to_excel(writer, sheet_name='Student_Responses', index=False)
+                    else:
+                        pd.DataFrame([{"Notice": "No student responses collected yet"}]).to_excel(writer, sheet_name='Student_Responses', index=False)
+
+                buffer.seek(0)
+                response = HttpResponse(
+                    buffer.read(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                return response
+
             if export_type == 'instructor':
                 data = InstructorSurvey.objects.filter(status='published').values()
                 df = pd.DataFrame(list(data))

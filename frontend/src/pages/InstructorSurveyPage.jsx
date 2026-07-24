@@ -2,11 +2,11 @@ import React, { useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { INSTRUCTOR_FIELDS, INSTRUCTOR_SECTIONS } from '../config/INSTRUCTOR_FIELDS';
 import { STUDENT_FIELDS, STUDENT_SECTIONS } from '../config/STUDENT_FIELDS';
-import { submitInstructorSurvey, publishInstructorSurvey, submitStudentSurvey } from '../api/surveyApi';
+import { submitInstructorSurvey, publishInstructorSurvey, updateInstructorSurvey, submitStudentSurvey } from '../api/surveyApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle, Copy, ChevronRight, AlertTriangle,
-  BookOpen, ArrowLeft, XCircle, Users, BarChart3, Edit3,
+  BookOpen, ArrowLeft, XCircle, Users, BarChart3, Edit3, Save, Info, X
 } from 'lucide-react';
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -45,6 +45,25 @@ function validateForm(fields, formData) {
     }
   });
   return errors;
+}
+
+// ── Payload sanitizer ─────────────────────────────────────────────────────────
+function sanitizePayload(fields, formData) {
+  const clean = { ...formData };
+  fields.forEach(field => {
+    const val = clean[field.name];
+    if (val === '' || val === undefined || val === null) {
+      if (['number', 'percentage', 'rating10', 'rating13'].includes(field.type)) {
+        clean[field.name] = null;
+      } else {
+        clean[field.name] = '';
+      }
+    } else if (['number', 'percentage', 'rating10', 'rating13'].includes(field.type)) {
+      const parsed = parseFloat(val);
+      clean[field.name] = isNaN(parsed) ? null : parsed;
+    }
+  });
+  return clean;
 }
 
 // ── Reusable field renderer ────────────────────────────────────────────────────
@@ -117,49 +136,71 @@ function FieldInput({ field, value, onChange, hasError, onFix }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const generateDummyData = (fields) => {
-  return Object.fromEntries(fields.map(f => {
-    let val = '';
-    if (f.type === 'text' || f.type === 'textarea') {
-      val = `Test ${f.label || f.name}`;
-    } else if (f.type === 'email') {
-      val = `test_${Math.floor(Math.random() * 1000)}@example.com`;
-    } else if (f.type === 'number') {
-      val = Math.floor(Math.random() * 50) + 10;
-    } else if (f.type === 'percentage') {
-      val = Math.floor(Math.random() * 100);
-    } else if (f.type === 'rating10') {
-      val = Math.floor(Math.random() * 10) + 1;
-    } else if (f.type === 'rating13') {
-      val = Math.floor(Math.random() * 13) + 1;
-    } else if (f.type === 'select' && f.options?.length > 0) {
-      val = f.options[Math.floor(Math.random() * f.options.length)];
-    }
-    return [f.name, val];
-  }));
+const createCleanEmptyState = (fields) => {
+  return Object.fromEntries(fields.map(f => [f.name, '']));
 };
 
+// Exclude Basic Information section so repetitive basic info fields are removed from the survey form UI
+const VISIBLE_SECTIONS = INSTRUCTOR_SECTIONS.filter(s => s !== "Basic Information");
+const SURVEY_FIELDS = INSTRUCTOR_FIELDS.filter(f => f.section !== "Basic Information");
+
 export default function InstructorSurveyPage() {
-  const initialState = generateDummyData(INSTRUCTOR_FIELDS);
+  const location = useLocation();
+  const fixedProfile = JSON.parse(localStorage.getItem('instructor_fixed_profile') || '{}');
+
+  const initialState = {
+    ...createCleanEmptyState(INSTRUCTOR_FIELDS),
+    q1_name: fixedProfile.name || location.state?.instructorInfo?.name || '',
+    q2_university: fixedProfile.university || location.state?.instructorInfo?.university || '',
+    q108_email: fixedProfile.email || location.state?.instructorInfo?.email || '',
+    q109_location: fixedProfile.city || location.state?.instructorInfo?.city || '',
+    q3_semester: location.state?.semester || 'Fall',
+    q4_course: location.state?.courseName || '',
+    year: '2026'
+  };
+
   const [formData, setFormData] = useState(initialState);
   const [errors, setErrors] = useState({});
-  const [surveyId, setSurveyId] = useState(null);
+  const [surveyId, setSurveyId] = useState(location.state?.surveyId || null);
   const [courseCode, setCourseCode] = useState(null);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState('');
   // steps: 'fill' | 'confirm' | 'done' | 'self_fill' | 'self_fill_done'
   const [step, setStep] = useState('fill');
   const [copied, setCopied] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (type, message) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 4500);
+  };
+
   // self-fill (teacher fills the student form themselves)
-  const selfInitial = generateDummyData(STUDENT_FIELDS);
+  const selfInitial = createCleanEmptyState(STUDENT_FIELDS);
   const [selfData, setSelfData] = useState(selfInitial);
   const [selfErrors, setSelfErrors] = useState({});
   const [editToken, setEditToken] = useState(null);
   const firstErrorRef = useRef(null);
   const navigate = useNavigate();
-  const location = useLocation();
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const isMandatory = location.state?.mandatory;
+
+  // ── Resume saved draft at exact tab index ────────────────────────────────
+  React.useEffect(() => {
+    const targetId = surveyId || location.state?.surveyId;
+    if (targetId) {
+      const localDraft = localStorage.getItem(`instructor_draft_${targetId}`);
+      if (localDraft) {
+        try {
+          const { formData: savedData, activeSectionIdx: savedIdx } = JSON.parse(localDraft);
+          if (savedData) setFormData(prev => ({ ...prev, ...savedData }));
+          if (typeof savedIdx === 'number' && savedIdx >= 0 && savedIdx < VISIBLE_SECTIONS.length) {
+            setActiveSectionIdx(savedIdx);
+            showToast('info', `ℹ️ Resumed survey at Section "${VISIBLE_SECTIONS[savedIdx]}".`);
+          }
+        } catch (e) { console.error(e); }
+      }
+    }
+  }, [surveyId, location.state]);
 
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -179,16 +220,16 @@ export default function InstructorSurveyPage() {
   const handleSave = async () => {
     setApiError('');
 
-    // Run validation
-    const newErrors = validateForm(INSTRUCTOR_FIELDS, formData);
+    // Run validation on substantive survey fields (excluding Basic Information)
+    const newErrors = validateForm(SURVEY_FIELDS, formData);
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
 
       // Auto-jump to the first section that contains an error
       const firstErrorFieldName = Object.keys(newErrors)[0];
-      const errorField = INSTRUCTOR_FIELDS.find(f => f.name === firstErrorFieldName);
+      const errorField = SURVEY_FIELDS.find(f => f.name === firstErrorFieldName);
       if (errorField) {
-        const errorSectionIdx = INSTRUCTOR_SECTIONS.indexOf(errorField.section);
+        const errorSectionIdx = VISIBLE_SECTIONS.indexOf(errorField.section);
         if (errorSectionIdx !== -1) {
           setActiveSectionIdx(errorSectionIdx);
         }
@@ -203,13 +244,55 @@ export default function InstructorSurveyPage() {
     }
 
     setLoading(true);
+    const payload = sanitizePayload(INSTRUCTOR_FIELDS, formData);
     try {
-      const result = await submitInstructorSurvey(formData);
-      setSurveyId(result.id);
+      let result;
+      const targetId = surveyId || location.state?.surveyId;
+      if (targetId) {
+        result = await updateInstructorSurvey(targetId, payload);
+        setSurveyId(targetId);
+      } else {
+        result = await submitInstructorSurvey(payload);
+        setSurveyId(result.id);
+      }
       setStep('confirm');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       setApiError(err.detail || JSON.stringify(err));
+      showToast('error', err.detail || 'Failed to save survey.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveAsDraft = async () => {
+    setLoading(true);
+    const currentSection = VISIBLE_SECTIONS[activeSectionIdx] || VISIBLE_SECTIONS[0];
+    const payload = sanitizePayload(INSTRUCTOR_FIELDS, formData);
+    try {
+      let result;
+      const targetId = surveyId || location.state?.surveyId;
+      if (targetId) {
+        result = await updateInstructorSurvey(targetId, payload);
+        setSurveyId(targetId);
+      } else {
+        result = await submitInstructorSurvey(payload);
+        setSurveyId(result.id);
+      }
+
+      const savedId = targetId || result.id;
+      localStorage.setItem(`instructor_draft_${savedId}`, JSON.stringify({
+        formData,
+        activeSectionIdx,
+        timestamp: Date.now()
+      }));
+
+      showToast('success', `💾 Draft saved on Tab "${currentSection}"! Returning to Dashboard...`);
+      setTimeout(() => {
+        navigate('/teacher/dashboard');
+      }, 600);
+    } catch (err) {
+      showToast('error', err.detail || 'Failed to save draft.');
     } finally {
       setLoading(false);
     }
@@ -220,7 +303,8 @@ export default function InstructorSurveyPage() {
     setLoading(true);
     setApiError('');
     try {
-      const result = await publishInstructorSurvey(surveyId);
+      const targetId = surveyId || location.state?.surveyId;
+      const result = await publishInstructorSurvey(targetId);
       setCourseCode(result.course_code);
       setStep('done');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -543,7 +627,7 @@ export default function InstructorSurveyPage() {
       {/* Sections */}
       {/* Active Section Card */}
       {(() => {
-        const section = INSTRUCTOR_SECTIONS[activeSectionIdx];
+        const section = VISIBLE_SECTIONS[activeSectionIdx] || VISIBLE_SECTIONS[0];
         const sectionFields = INSTRUCTOR_FIELDS.filter(f => f.section === section);
         const sectionHasError = sectionFields.some(f => errors[f.name]);
         const sIdx = activeSectionIdx;
@@ -650,73 +734,119 @@ export default function InstructorSurveyPage() {
       })()}
 
       {/* Wizard Controls */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 24 }}>
-        {activeSectionIdx > 0 ? (
-          <button
-            type="button"
-            onClick={() => {
-              setActiveSectionIdx(prev => prev - 1);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            style={{
-              padding: '14px 24px', borderRadius: 12, border: '1px solid #e2e8f0',
-              background: '#fff', cursor: 'pointer', fontWeight: 700, color: '#475569',
-              display: 'flex', alignItems: 'center', gap: 6,
-              transition: 'background 0.2s',
-            }}
-          >
-            <ArrowLeft size={16} /> Back
-          </button>
-        ) : (
-          <div /> // placeholder space alignment
-        )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
+        <div>
+          {activeSectionIdx > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSectionIdx(prev => prev - 1);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              style={{
+                padding: '14px 24px', borderRadius: 12, border: '1px solid #e2e8f0',
+                background: '#fff', cursor: 'pointer', fontWeight: 700, color: '#475569',
+                display: 'flex', alignItems: 'center', gap: 6,
+                transition: 'background 0.2s',
+              }}
+            >
+              <ArrowLeft size={16} /> Back
+            </button>
+          )}
+        </div>
 
-        {activeSectionIdx < INSTRUCTOR_SECTIONS.length - 1 ? (
-          <button
-            type="button"
-            onClick={() => {
-              const section = INSTRUCTOR_SECTIONS[activeSectionIdx];
-              const sectionFields = INSTRUCTOR_FIELDS.filter(f => f.section === section);
-              const sectionErrors = validateForm(sectionFields, formData);
-              if (Object.keys(sectionErrors).length > 0) {
-                setErrors(prev => ({ ...prev, ...sectionErrors }));
-                return;
-              }
-              setActiveSectionIdx(prev => prev + 1);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            style={{
-              padding: '14px 28px', borderRadius: 12, border: 'none',
-              background: '#1e3a8a', color: '#fff', cursor: 'pointer',
-              fontWeight: 700, fontSize: 15,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              transition: 'background 0.2s',
-            }}
-          >
-            Next Section <ChevronRight size={18} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={loading || !isFormReady}
-            title={!isFormReady ? `Fill all required fields (${filled}/${required.length} done)` : ''}
-            style={{
-              padding: '14px 32px', borderRadius: 12,
-              background: isFormReady ? '#1e3a8a' : '#cbd5e1',
-              color: isFormReady ? '#fff' : '#94a3b8',
-              border: 'none',
-              fontWeight: 900, fontSize: 15,
-              cursor: isFormReady ? 'pointer' : 'not-allowed',
-              boxShadow: isFormReady ? '0 8px 24px rgba(30,58,138,0.25)' : 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              transition: 'background 0.3s, color 0.3s, box-shadow 0.3s',
-            }}
-          >
-            {loading ? 'Saving...' : <>Save &amp; Review <ChevronRight size={18} /></>}
-          </button>
-        )}
+        {/* 💾 Save as Draft Button on Every Tab */}
+        <button
+          type="button"
+          onClick={handleSaveAsDraft}
+          disabled={loading}
+          style={{
+            padding: '14px 22px', borderRadius: 12, border: '1.5px solid #0284c7',
+            background: '#f0f9ff', color: '#0369a1', cursor: 'pointer',
+            fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8,
+            transition: 'all 0.2s'
+          }}
+        >
+          <Save size={16} /> {loading ? 'Saving...' : 'Save as Draft'}
+        </button>
+
+        <div>
+          {activeSectionIdx < VISIBLE_SECTIONS.length - 1 ? (
+            <button
+              type="button"
+              onClick={() => {
+                const section = VISIBLE_SECTIONS[activeSectionIdx];
+                const sectionFields = INSTRUCTOR_FIELDS.filter(f => f.section === section);
+                const sectionErrors = validateForm(sectionFields, formData);
+                if (Object.keys(sectionErrors).length > 0) {
+                  setErrors(prev => ({ ...prev, ...sectionErrors }));
+                  showToast('error', `Please fix ${Object.keys(sectionErrors).length} error(s) in Section "${section}" before proceeding.`);
+                  setTimeout(() => {
+                    document.querySelector('[data-field-error="true"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 100);
+                  return;
+                }
+                setActiveSectionIdx(prev => prev + 1);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              style={{
+                padding: '14px 28px', borderRadius: 12, border: 'none',
+                background: '#1e3a8a', color: '#fff', cursor: 'pointer',
+                fontWeight: 700, fontSize: 15,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                transition: 'background 0.2s',
+              }}
+            >
+              Next Section <ChevronRight size={18} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={loading || !isFormReady}
+              title={!isFormReady ? `Fill all required fields (${filled}/${required.length} done)` : ''}
+              style={{
+                padding: '14px 32px', borderRadius: 12,
+                background: isFormReady ? '#1e3a8a' : '#cbd5e1',
+                color: isFormReady ? '#fff' : '#94a3b8',
+                border: 'none',
+                fontWeight: 900, fontSize: 15,
+                cursor: isFormReady ? 'pointer' : 'not-allowed',
+                boxShadow: isFormReady ? '0 8px 24px rgba(30,58,138,0.25)' : 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                transition: 'background 0.3s, color 0.3s, box-shadow 0.3s',
+              }}
+            >
+              {loading ? 'Saving...' : <>Save &amp; Review <ChevronRight size={18} /></>}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* 🔔 Toaster Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            style={{
+              position: 'fixed', top: 24, right: 24, zIndex: 9999,
+              background: toast.type === 'error' ? '#fef2f2' : toast.type === 'success' ? '#f0fdf4' : '#f0f9ff',
+              border: toast.type === 'error' ? '1.5px solid #fecaca' : toast.type === 'success' ? '1.5px solid #86efac' : '1.5px solid #bae6fd',
+              color: toast.type === 'error' ? '#dc2626' : toast.type === 'success' ? '#166534' : '#0369a1',
+              borderRadius: 16, padding: '14px 20px', boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
+              display: 'flex', alignItems: 'center', gap: 12, fontWeight: 800, fontSize: 14
+            }}
+          >
+            {toast.type === 'error' ? <AlertTriangle size={18} /> : toast.type === 'success' ? <CheckCircle size={18} /> : <Info size={18} />}
+            <span>{toast.message}</span>
+            <button onClick={() => setToast(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', marginLeft: 8 }}>
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
 
     </div>

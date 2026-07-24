@@ -74,6 +74,15 @@ class InstructorSurveySerializer(serializers.ModelSerializer):
         exclude = ['teacher']  # teacher is set automatically in the view
         read_only_fields = ['id', 'course_code', 'created_at', 'updated_at']
 
+    def to_internal_value(self, data):
+        if hasattr(data, 'copy'):
+            data = data.copy()
+        for field_name, field in self.fields.items():
+            if field_name in data and data[field_name] == "":
+                if field.allow_null:
+                    data[field_name] = None
+        return super().to_internal_value(data)
+
 
 class StudentSurveySerializer(serializers.ModelSerializer):
     # Show the course_code from the related instructor survey (read-only)
@@ -83,3 +92,12 @@ class StudentSurveySerializer(serializers.ModelSerializer):
         model  = StudentSurvey
         fields = '__all__'
         read_only_fields = ['id', 'edit_token', 'submitted_at', 'updated_at', 'instructor_survey', 'course_code']
+
+    def to_internal_value(self, data):
+        if hasattr(data, 'copy'):
+            data = data.copy()
+        for field_name, field in self.fields.items():
+            if field_name in data and data[field_name] == "":
+                if field.allow_null:
+                    data[field_name] = None
+        return super().to_internal_value(data)
