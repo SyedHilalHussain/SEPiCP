@@ -124,6 +124,20 @@ def perform_basic_analysis(data):
 
             results["columns"][col] = col_analysis
 
+        # Identify lowest scoring numerical variables (bottom 10)
+        numeric_means = []
+        for col, col_data in results["columns"].items():
+            if col_data.get("type") == "numeric" and col_data.get("mean") is not None:
+                numeric_means.append({
+                    "column": col,
+                    "clean_name": str(col).replace('_', ' ').title(),
+                    "mean": col_data["mean"],
+                    "min": col_data.get("min"),
+                    "max": col_data.get("max")
+                })
+
+        results["lowest_scoring_items"] = sorted(numeric_means, key=lambda x: x["mean"])[:10]
+
         return sanitize_results(results)
 
     except Exception as e:

@@ -278,6 +278,36 @@ const ResultsPage = () => {
                 </Card>
               </div>
 
+              {/* Priority Focus: Lowest Scoring Variables */}
+              {result.lowest_scoring_items && result.lowest_scoring_items.length > 0 && (
+                <Card className="rounded-[24px] border-rose-200 bg-rose-50/40 p-6 shadow-md">
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <div className="p-2 bg-rose-100 rounded-lg">
+                      <span className="text-rose-700 text-sm font-black">⚠️</span>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-rose-950">Priority Focus: Lowest Scoring Variables</h3>
+                      <p className="text-xs text-rose-700 font-medium">Top variables with lowest student/survey evaluation means</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {result.lowest_scoring_items.map((item, idx) => (
+                      <div key={idx} className="bg-white p-3.5 rounded-2xl border border-rose-200/80 shadow-xs flex justify-between items-center">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800 capitalize">{item.clean_name || item.column.replace(/_/g, ' ')}</p>
+                          <p className="text-[10px] text-slate-400 font-bold">Variable #{idx + 1}</p>
+                        </div>
+                        <div className="text-right">
+                          <span className="px-2.5 py-1 bg-rose-100 text-rose-800 text-xs font-black rounded-lg">
+                            {item.mean !== undefined ? item.mean.toFixed(2) : '-'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
               {/* Column Statistics Table */}
               <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
                 <h3 className="text-lg font-black text-slate-900 mb-6">
