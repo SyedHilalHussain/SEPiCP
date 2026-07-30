@@ -59,7 +59,10 @@ const ResultsPage = () => {
             <Download className="w-4 h-4 text-slate-400" />
             <span className="hidden sm:inline">Export</span>
           </Button>
-          <Button className="h-10 px-4 rounded-xl bg-[#1e3a8a] text-white font-black text-[11px] uppercase tracking-widest shadow-lg shadow-blue-900/10 hover:bg-[#1a337a] transition-all flex items-center gap-2">
+          <Button
+            onClick={() => window.print()}
+            className="h-10 px-4 rounded-xl bg-[#1e3a8a] text-white font-black text-[11px] uppercase tracking-widest shadow-lg shadow-blue-900/10 hover:bg-[#1a337a] transition-all flex items-center gap-2"
+          >
             <FileText className="w-4 h-4" />
             Export PDF
           </Button>
@@ -129,52 +132,67 @@ const ResultsPage = () => {
                     <Users className="w-5 h-5 text-slate-400" />
                   </div>
                   <span className="text-2xl font-black text-slate-900">
-                    {result.predictions_sample?.length ?? "-"}
+                    {result.metrics?.sample_size ?? result.metrics?.total_rows ?? result.predictions_sample?.length ?? "-"}
                   </span>
                 </Card>
               </div>
 
+              {/* Regression Equation Banner */}
+              {result.equation && (
+                <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6 overflow-hidden">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-blue-50 rounded-lg">
+                      <Sigma className="w-5 h-5 text-[#1e3a8a]" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900">Linear Regression Equation</h3>
+                      <p className="text-xs text-slate-400 font-bold">Fitted Mathematical Formula</p>
+                    </div>
+                  </div>
+                  <div className="font-mono text-sm leading-relaxed text-slate-800 bg-slate-50 p-4 rounded-xl border border-slate-100 break-all font-bold">
+                    {result.equation}
+                  </div>
+                </Card>
+              )}
+
               <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
                 <h3 className="text-lg font-black text-slate-900 mb-4">
-                  Coefficients
+                  Coefficients & Feature Impact
                 </h3>
                 <div className="overflow-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-100 text-left">
-                        <th className="py-2">Feature</th>
-                        <th className="py-2">Coefficient</th>
+                      <tr className="border-b border-slate-200 text-slate-400 font-black text-[11px] uppercase tracking-wider text-left">
+                        <th className="py-3 px-4">Feature</th>
+                        <th className="py-3 px-4">Impact Direction</th>
+                        <th className="py-3 px-4 text-right">Coefficient</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {(result.coefficients || []).map((item, index) => (
-                        <tr key={index} className="border-b border-slate-50">
-                          <td className="py-2">{item.feature}</td>
-                          <td className="py-2">
-                            {typeof item.coefficient === "number"
-                              ? item.coefficient.toFixed(4)
-                              : item.coefficient}
-                          </td>
-                        </tr>
-                      ))}
+                    <tbody className="divide-y divide-slate-100">
+                      {(result.coefficients || []).map((item, index) => {
+                        const val = item.coefficient;
+                        const isPositive = typeof val === "number" ? val >= 0 : true;
+                        return (
+                          <tr key={index} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="py-3 px-4 font-bold text-slate-800 capitalize">
+                              {item.clean_feature || item.feature.replace(/_encoded$/g, '').replace(/_/g, ' ')}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider ${isPositive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                                {isPositive ? 'Positive (+)' : 'Negative (-)'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                              {typeof val === "number" ? val.toFixed(4) : val}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               </Card>
 
-              {/* <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
-                <h3 className="text-lg font-black text-slate-900 mb-4">Plots</h3>
-                <div className="grid grid-cols-1 gap-4">
-                  {(result.plots || []).map((img, index) => (
-                    <img
-                      key={index}
-                      src={img}
-                      alt={`regression-plot-${index}`}
-                      className="w-full rounded-lg border border-slate-100"
-                    />
-                  ))}
-                </div>
-              </Card> */}
               <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
                 <h3 className="text-lg font-black text-slate-900 mb-6">
                   Regression Plots
@@ -198,17 +216,39 @@ const ResultsPage = () => {
                 </div>
               </Card>
 
+              {/* Structured Predictions Table */}
               <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
                 <h3 className="text-lg font-black text-slate-900 mb-4">
                   Predictions Sample
                 </h3>
-                <pre className="text-[11px] bg-slate-50 border border-slate-100 rounded-xl p-4 overflow-x-auto">
-                  {JSON.stringify(result.predictions_sample ?? [], null, 2)}
-                </pre>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-400 font-black text-[11px] uppercase tracking-wider">
+                        <th className="py-3 px-4">Sample #</th>
+                        <th className="py-3 px-4">Actual Value</th>
+                        <th className="py-3 px-4">Predicted Value</th>
+                        <th className="py-3 px-4 text-right">Absolute Error</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(result.predictions_sample || []).map((row, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-3 px-4 font-bold text-slate-500">#{idx + 1}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-800">{typeof row.actual === 'number' ? row.actual.toFixed(4) : row.actual}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-[#1e3a8a]">{typeof row.predicted === 'number' ? row.predicted.toFixed(4) : row.predicted}</td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-slate-600">
+                            {row.error !== undefined ? row.error.toFixed(4) : Math.abs(row.actual - row.predicted).toFixed(4)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </Card>
             </>
           )}
-          {analysisType === "basic" && (
+          {(analysisType === "basic" || analysisType === "descriptive") && (
             <>
               {/* Overview Stats */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -326,28 +366,33 @@ const ResultsPage = () => {
                     Total Variance
                   </span>
                   <p className="text-2xl font-black text-slate-900 mt-3">
-                    {result.summary?.total_variance ?? "-"}%
+                    {typeof result.summary?.total_variance === 'number' ? result.summary.total_variance.toFixed(2) : result.summary?.total_variance ?? "-"}%
                   </p>
                 </Card>
               </div>
 
+              {/* Complete Variance Explained Table */}
               <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
                 <h3 className="text-lg font-black text-slate-900 mb-4">
-                  Variance Explained
+                  Variance Explained Table
                 </h3>
                 <div className="overflow-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-100">
-                        <th className="py-2 text-left">Component</th>
-                        <th className="py-2 text-left">Variance %</th>
+                      <tr className="border-b border-slate-200 text-slate-400 font-black text-[11px] uppercase tracking-wider">
+                        <th className="py-3 px-4">Component</th>
+                        <th className="py-3 px-4">Eigenvalue</th>
+                        <th className="py-3 px-4">Variance Explained (%)</th>
+                        <th className="py-3 px-4 text-right">Cumulative Variance (%)</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-slate-100">
                       {(result.variance_explained || []).map((v, i) => (
-                        <tr key={i} className="border-b border-slate-50">
-                          <td className="py-2">{v.component_num}</td>
-                          <td className="py-2">{v.variance_percent}%</td>
+                        <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-3 px-4 font-bold text-[#1e3a8a]">PC{v.component_num}</td>
+                          <td className="py-3 px-4 font-mono">{typeof v.eigenvalue === 'number' ? v.eigenvalue.toFixed(4) : (v.eigenvalue ?? '-')}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-800">{typeof v.variance_percent === 'number' ? v.variance_percent.toFixed(2) : v.variance_percent}%</td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-emerald-600">{typeof v.cumulative_variance === 'number' ? v.cumulative_variance.toFixed(2) : v.cumulative_variance}%</td>
                         </tr>
                       ))}
                     </tbody>
@@ -368,25 +413,6 @@ const ResultsPage = () => {
                 </Card>
               )}
 
-              {/* <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
-                <h3 className="text-lg font-black text-slate-900 mb-4">
-                  PCA Visualizations
-                </h3>
-                <div className="space-y-4">
-                  {(result.plots || []).map((plot, index) => (
-                    <div key={index}>
-                      <p className="text-sm font-black text-slate-700 mb-2">
-                        {plot.title || `Plot ${index + 1}`}
-                      </p>
-                      <img
-                        src={plot.image}
-                        alt={`pca-plot-${index}`}
-                        className="w-full rounded-lg border border-slate-100"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </Card> */}
               <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
                 <h3 className="text-lg font-black text-slate-900 mb-6">
                   PCA Visualizations
@@ -416,7 +442,7 @@ const ResultsPage = () => {
                 </div>
               </Card>
 
-              {/* NEW: PC Equations Section */}
+              {/* PC Equations Section */}
               <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6 overflow-hidden">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 bg-blue-50 rounded-lg">
@@ -448,7 +474,40 @@ const ResultsPage = () => {
                 </div>
               </Card>
 
-              {/* NEW: Variable Contributions Table/Grid */}
+              {/* Feature Loadings Matrix Table */}
+              {result.feature_loadings && result.feature_loadings.length > 0 && (
+                <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
+                  <h3 className="text-lg font-black text-slate-900 mb-4">
+                    Feature Loadings Matrix
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-400 font-black text-[11px] uppercase tracking-wider">
+                          <th className="py-3 px-4">Feature Name</th>
+                          {(result.pc_columns || []).map((pc, i) => (
+                            <th key={i} className="py-3 px-4 text-center">{pc} Loading</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {result.feature_loadings.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="py-3 px-4 font-bold text-slate-800">{item.feature_name}</td>
+                            {(item.loadings || []).map((loadingVal, pcIdx) => (
+                              <td key={pcIdx} className={`py-3 px-4 text-center font-mono font-bold ${loadingVal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {loadingVal >= 0 ? '+' : ''}{loadingVal.toFixed(4)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+
+              {/* Variable Contributions Table/Grid */}
               <Card className="rounded-[24px] border-slate-200 shadow-lg shadow-slate-200/20 bg-white p-6">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 bg-emerald-50 rounded-lg">

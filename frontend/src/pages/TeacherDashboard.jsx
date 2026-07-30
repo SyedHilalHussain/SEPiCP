@@ -1,17 +1,45 @@
 import React, { useEffect, useState } from 'react';
-import { Users, TrendingUp, Copy, CheckCircle, PlusCircle, FileText, AlertCircle } from 'lucide-react';
+import { Users, TrendingUp, Copy, CheckCircle, PlusCircle, FileText, AlertCircle, BarChart3 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { convertCourseToDataset } from '../api/surveyApi';
 
 export default function TeacherDashboard() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState(null);
+  const [analyzingId, setAnalyzingId] = useState(null);
+  const [analysisError, setAnalysisError] = useState('');
   const navigate = useNavigate();
 
   const handleCopy = (code) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  const handleAnalyzeCourse = async (courseId, courseCode) => {
+    setAnalyzingId(courseId);
+    setAnalysisError('');
+    try {
+      const res = await convertCourseToDataset(courseId, 'instructor_student');
+      if (res.data) {
+        const cols = (res.columns || Object.keys(res.data[0] || {})).map(key => ({
+          header: key.toUpperCase(),
+          accessorKey: key
+        }));
+
+        sessionStorage.setItem('uploaded_table_data', JSON.stringify(res.data));
+        sessionStorage.setItem('uploaded_columns', JSON.stringify(cols));
+        sessionStorage.setItem('uploaded_file_info', JSON.stringify({ name: res.name || `Course ${courseCode} Survey`, size: 'Course Data' }));
+
+        navigate('/analysis');
+      }
+    } catch (err) {
+      console.error("Course analysis failed:", err);
+      setAnalysisError(err.detail || err.error || `No survey data found for course ${courseCode}.`);
+    } finally {
+      setAnalyzingId(null);
+    }
   };
 
   useEffect(() => {
@@ -47,6 +75,16 @@ export default function TeacherDashboard() {
         </Link>
       </div>
 
+      {analysisError && (
+        <div className="mb-6 p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-extrabold flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={18} className="shrink-0 text-rose-600" />
+            <span>{analysisError}</span>
+          </div>
+          <button onClick={() => setAnalysisError('')} className="text-rose-500 hover:text-rose-800 font-bold">✕</button>
+        </div>
+      )}
+
       <div className="space-y-4">
         {data?.courses?.map(course => (
           <div key={course.id} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -75,12 +113,22 @@ export default function TeacherDashboard() {
 
             {/* Right: Metrics, Survey ID / Code & Evaluate Form Action Button */}
             <div className="flex items-center gap-4 shrink-0 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-4 md:pt-0 flex-wrap">
-              {/* Response Counter */}
-              <div className="text-center bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Student Responses</div>
-                <div className="text-lg font-black text-slate-800 flex items-center justify-center gap-1">
-                  <Users size={16} className="text-blue-600" />
-                  {course.published_responses}
+              {/* Response Counters (Published vs Draft) */}
+              <div className="flex gap-2 items-center bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+                <div className="text-center px-3 py-1 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200">
+                  <div className="text-[9px] font-black uppercase tracking-wider text-emerald-700">Published</div>
+                  <div className="text-sm font-black flex items-center justify-center gap-1 text-emerald-900">
+                    <Users size={13} className="text-emerald-600" />
+                    {course.published_responses || 0}
+                  </div>
+                </div>
+
+                <div className="text-center px-3 py-1 bg-amber-50 text-amber-800 rounded-lg border border-amber-200">
+                  <div className="text-[9px] font-black uppercase tracking-wider text-amber-700">Drafts</div>
+                  <div className="text-sm font-black flex items-center justify-center gap-1 text-amber-900">
+                    <Users size={13} className="text-amber-600" />
+                    {course.saved_responses || 0}
+                  </div>
                 </div>
               </div>
 
@@ -94,6 +142,17 @@ export default function TeacherDashboard() {
                   </button>
                 </div>
               </div>
+
+              {/* Analyze Course Action Button */}
+              <button
+                disabled={analyzingId === course.id}
+                onClick={() => handleAnalyzeCourse(course.id, course.course_code)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                title="Run PCA, Linear Regression, and statistical analysis on this course"
+              >
+                <BarChart3 size={15} />
+                {analyzingId === course.id ? "Loading..." : "Analyze Course"}
+              </button>
 
               {/* Evaluate Form Action Button (Shows Draft status explicitly if pending) */}
               <button

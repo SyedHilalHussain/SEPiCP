@@ -82,22 +82,17 @@ class AdminDashboardView(APIView):
 import pandas as pd
 import json
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 class UploadDatasetView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-
         file = request.FILES.get("file")
         json_data = request.data.get("data")
-        
-        # DEBUG LOGGING
-        with open("upload_debug.txt", "w") as f:
-            f.write(f"file: {file}\n")
-            f.write(f"request.data type: {type(request.data)}\n")
-            f.write(f"request.data keys: {request.data.keys() if hasattr(request.data, 'keys') else 'No keys'}\n")
-            f.write(f"request.data: {request.data}\n")
-            f.write(f"json_data type: {type(json_data)}\n")
-            f.write(f"json_data: {str(json_data)[:200]}\n")
+        sheet_name = request.data.get("sheet_name", 0)
 
         if file is None and not json_data:
             return Response(
@@ -107,16 +102,40 @@ class UploadDatasetView(APIView):
 
         try:
             if file:
-                # 🔥 Read Excel file
-                df = pd.read_excel(file)
+                # Read Excel file with specified sheet name if provided
+                try:
+                    df = pd.read_excel(file, sheet_name=sheet_name if sheet_name != 'sheet1' else 0)
+                except Exception:
+                    df = pd.read_excel(file, sheet_name=0)
+                    
+                # Standardize survey feature names for both instructor and student datasets
+                col_rename = {}
+                for i in range(1, 7):
+                    col_rename[f'content_p_{i}'] = f'content_{i}'
+                    col_rename[f'content_s_{i}'] = f'content_{i}'
+                for i in range(1, 5):
+                    col_rename[f'relevance_{i}p'] = f'relevance_{i}'
+                    col_rename[f'relevance_{i}s'] = f'relevance_{i}'
+                for i in range(1, 7):
+                    col_rename[f'discuss_{i}p'] = f'discuss_{i}'
+                    col_rename[f'discuss_{i}s'] = f'discuss_{i}'
+                for i in range(1, 9):
+                    col_rename[f'act_part_{i}p'] = f'act_part_{i}'
+                    col_rename[f'act_part_{i}s'] = f'act_part_{i}'
+                for i in range(1, 6):
+                    col_rename[f'cls_org_{i}p'] = f'cls_org_{i}'
+                    col_rename[f'cls_org_{i}s'] = f'cls_org_{i}'
+                for i in range(1, 7):
+                    col_rename[f'cncts_{i}p'] = f'cncts_{i}'
+                    col_rename[f'cncts_{i}s'] = f'cncts_{i}'
+
+                df.rename(columns=col_rename, inplace=True)
                 original_data = json.loads(df.to_json(orient='records', date_format='iso'))
             else:
-                # Use provided JSON data
                 original_data = json_data
 
-            # Clean data
+            # Clean data using updated clean_dataset service
             cleaned_data = clean_dataset(original_data)
-            # cleaned_data = json.loads(df.to_json(orient='records', date_format='iso'))
 
             # Save to DB
             dataset = Dataset.objects.create(
@@ -126,15 +145,14 @@ class UploadDatasetView(APIView):
             )
 
             serializer = DatasetSerializer(dataset)
-
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
+            logger.error(f"Upload failed: {str(e)}", exc_info=True)
             return Response(
                 {"error": "Processing failed", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-        
+            )        
 class UserDatasetListView(generics.ListAPIView):
     serializer_class = DatasetSerializer
     permission_classes = [IsAuthenticated]
@@ -144,6 +162,14 @@ class UserDatasetListView(generics.ListAPIView):
             user=self.request.user
         ).order_by('-created_at')
 
+
+class UserDatasetDetailView(generics.RetrieveAPIView):
+    serializer_class = DatasetSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Dataset.objects.filter(user=self.request.user)
+
 class MultipleLinearRegressionView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -151,7 +177,23 @@ class MultipleLinearRegressionView(APIView):
         independent_vars = request.data.get("independent_vars")
         dependent_var = request.data.get("dependent_var")
         data = request.data.get("data")
+        dataset_id = request.data.get("dataset_id")
         missing_values = request.data.get("missing_values", "drop")
+
+        # Only fetch from DB if no data was provided in the request body.
+        # dataset_id may be a course/survey ID (not a Dataset ID) when coming from course mode.
+        if dataset_id and (not data or (isinstance(data, list) and len(data) == 0)):
+            try:
+                ds = Dataset.objects.get(id=dataset_id, user=request.user)
+                data = ds.cleaned_data or ds.original_data
+            except Dataset.DoesNotExist:
+                pass  # dataset_id was a course id — data must be in request body
+
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                pass
 
         if not all([independent_vars, dependent_var, data]):
             return Response({"error": "Missing required parameters: independent_vars, dependent_var, and data"}, 
@@ -174,17 +216,33 @@ class MultipleLinearRegressionView(APIView):
 
             return Response(results, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class PCAAnalysisView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         data = request.data.get("data")
+        dataset_id = request.data.get("dataset_id")
         selected_columns = request.data.get("selected_columns")
         n_components = request.data.get("n_components")
         variance_threshold = request.data.get("variance_threshold")
         missing_values = request.data.get("missing_values", "drop")
+
+        # Only fetch from DB if no data was provided in the request body.
+        # dataset_id may be a course/survey ID (not a Dataset ID) when coming from course mode.
+        if dataset_id and (not data or (isinstance(data, list) and len(data) == 0)):
+            try:
+                ds = Dataset.objects.get(id=dataset_id, user=request.user)
+                data = ds.cleaned_data or ds.original_data
+            except Dataset.DoesNotExist:
+                pass  # dataset_id was a course id — data must be in request body
+
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                pass
 
         if not all([data, selected_columns]):
             return Response({"error": "Missing required parameters: data and selected_columns"}, 
@@ -214,16 +272,32 @@ class PCAAnalysisView(APIView):
 
             return Response(results, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class BasicAnalysisView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         data = request.data.get("data")
+        dataset_id = request.data.get("dataset_id")
 
-        if not data:
-            return Response({"error": "Missing required parameter: data"}, 
+        # Only fetch from DB if no data was provided in the request body.
+        # dataset_id may be a course/survey ID (not a Dataset ID) when coming from course mode.
+        if dataset_id and (not data or (isinstance(data, list) and len(data) == 0)):
+            try:
+                ds = Dataset.objects.get(id=dataset_id, user=request.user)
+                data = ds.cleaned_data or ds.original_data
+            except Dataset.DoesNotExist:
+                pass  # dataset_id was a course id — data must be in request body
+
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                pass
+
+        if not data or not isinstance(data, list) or len(data) == 0:
+            return Response({"error": "Missing required parameter: dataset contains no valid rows."}, 
                             status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -233,13 +307,15 @@ class BasicAnalysisView(APIView):
             AnalysisResult.objects.create(
                 user=request.user,
                 analysis_type='basic',
-                input_params={},
+                input_params={"dataset_id": dataset_id} if dataset_id else {},
                 output_results=results
             )
 
             return Response(results, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 
 class TeacherDashboardView(APIView):
@@ -524,33 +600,59 @@ class AdminSurveyExportView(APIView):
 
     def get(self, request):
         try:
-            export_type = request.GET.get('type')
+            export_type = request.GET.get('type', 'all')
             course_id   = request.GET.get('course_id')
+
+            # Standardize survey feature names for both instructor and student datasets
+            col_rename = {}
+            for i in range(1, 7):
+                col_rename[f'content_p_{i}'] = f'content_{i}'
+                col_rename[f'content_s_{i}'] = f'content_{i}'
+            for i in range(1, 5):
+                col_rename[f'relevance_{i}p'] = f'relevance_{i}'
+                col_rename[f'relevance_{i}s'] = f'relevance_{i}'
+            for i in range(1, 7):
+                col_rename[f'discuss_{i}p'] = f'discuss_{i}'
+                col_rename[f'discuss_{i}s'] = f'discuss_{i}'
+            for i in range(1, 9):
+                col_rename[f'act_part_{i}p'] = f'act_part_{i}'
+                col_rename[f'act_part_{i}s'] = f'act_part_{i}'
+            for i in range(1, 6):
+                col_rename[f'cls_org_{i}p'] = f'cls_org_{i}'
+                col_rename[f'cls_org_{i}s'] = f'cls_org_{i}'
+            for i in range(1, 7):
+                col_rename[f'cncts_{i}p'] = f'cncts_{i}'
+                col_rename[f'cncts_{i}s'] = f'cncts_{i}'
 
             if course_id:
                 survey = InstructorSurvey.objects.get(pk=course_id)
-                student_data = StudentSurvey.objects.filter(instructor_survey=survey, is_published=True).values()
-                
-                df_instructor = pd.DataFrame([InstructorSurveySerializer(survey).data])
-                df_students   = pd.DataFrame(list(student_data))
-
-                filename = f'course_{survey.course_code}_responses.xlsx'
-
-                for col in df_instructor.columns:
-                    if pd.api.types.is_datetime64_any_dtype(df_instructor[col]):
-                        df_instructor[col] = df_instructor[col].astype(str)
-
-                for col in df_students.columns:
-                    if pd.api.types.is_datetime64_any_dtype(df_students[col]):
-                        df_students[col] = df_students[col].astype(str)
-
+                filename = f'course_{survey.course_code}_{export_type}_responses.xlsx'
                 buffer = io.BytesIO()
+
                 with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                    df_instructor.to_excel(writer, sheet_name='Instructor_Evaluation', index=False)
-                    if not df_students.empty:
-                        df_students.to_excel(writer, sheet_name='Student_Responses', index=False)
-                    else:
-                        pd.DataFrame([{"Notice": "No student responses collected yet"}]).to_excel(writer, sheet_name='Student_Responses', index=False)
+                    if export_type in ['instructor', 'all']:
+                        inst_data = list(InstructorSurvey.objects.filter(id=course_id).values())
+                        if inst_data:
+                            df_inst = pd.DataFrame(inst_data)
+                            df_inst.rename(columns=col_rename, inplace=True)
+                            records_json = df_inst.to_json(orient='records', date_format='iso')
+                            cleaned_inst = clean_dataset(json.loads(records_json))
+                            df_inst_clean = pd.DataFrame(cleaned_inst)
+                        else:
+                            df_inst_clean = pd.DataFrame([{"Notice": "No instructor response found"}])
+                        df_inst_clean.to_excel(writer, sheet_name='Instructor_Evaluation', index=False)
+
+                    if export_type in ['student', 'all']:
+                        stud_data = list(StudentSurvey.objects.filter(instructor_survey_id=course_id, is_published=True).values())
+                        if stud_data:
+                            df_stud = pd.DataFrame(stud_data)
+                            df_stud.rename(columns=col_rename, inplace=True)
+                            records_json = df_stud.to_json(orient='records', date_format='iso')
+                            cleaned_stud = clean_dataset(json.loads(records_json))
+                            df_stud_clean = pd.DataFrame(cleaned_stud)
+                        else:
+                            df_stud_clean = pd.DataFrame([{"Notice": "No student responses collected yet"}])
+                        df_stud_clean.to_excel(writer, sheet_name='Student_Responses', index=False)
 
                 buffer.seek(0)
                 response = HttpResponse(
@@ -577,14 +679,19 @@ class AdminSurveyExportView(APIView):
             else:
                 return Response({"error": "Invalid or missing type parameter"}, status=status.HTTP_400_BAD_REQUEST)
 
+            df.rename(columns=col_rename, inplace=True)
+            records_json = df.to_json(orient='records', date_format='iso')
+            cleaned_data = clean_dataset(json.loads(records_json))
+            df_clean = pd.DataFrame(cleaned_data)
+
             # Convert timezone-aware datetimes to timezone-unaware
-            for col in df.columns:
-                if pd.api.types.is_datetime64_any_dtype(df[col]):
-                    df[col] = df[col].dt.tz_localize(None)
+            for col in df_clean.columns:
+                if pd.api.types.is_datetime64_any_dtype(df_clean[col]):
+                    df_clean[col] = df_clean[col].dt.tz_localize(None)
 
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                df.to_excel(writer, sheet_name=sheet, index=False)
+                df_clean.to_excel(writer, sheet_name=sheet, index=False)
 
             buffer.seek(0)
             
@@ -601,18 +708,35 @@ class AdminSurveyExportView(APIView):
             )
 
 class AdminSurveyToDatasetView(APIView):
-    """POST — Retrieve surveys as raw data to populate the Upload table."""
-    permission_classes = [IsAdminUser]
+    """POST — Retrieve surveys as raw data to populate the Upload / Analysis table."""
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         try:
             convert_type = request.GET.get('type')
-            if not convert_type:
-                return Response({"error": "Missing type parameter"}, status=status.HTTP_400_BAD_REQUEST)
+            course_id = request.GET.get('course_id')
+
+            if not convert_type and not course_id:
+                return Response({"error": "Missing type or course_id parameter"}, status=status.HTTP_400_BAD_REQUEST)
                 
             dataset = None
-            
-            if convert_type == 'instructor':
+            course_obj = InstructorSurvey.objects.filter(id=course_id).first() if course_id else None
+            course_prefix = f"Course {course_obj.course_code} - " if course_obj else ""
+
+            if course_id:
+                if convert_type == 'instructor':
+                    query_data = InstructorSurvey.objects.filter(id=course_id).values()
+                    name = f"{course_prefix}Instructor Responses"
+                elif convert_type == 'instructor_student':
+                    inst = list(InstructorSurvey.objects.filter(id=course_id).values())
+                    stud = list(StudentSurvey.objects.filter(instructor_survey_id=course_id, is_published=True).values())
+                    query_data = inst + stud
+                    name = f"{course_prefix}Combined Responses"
+                else:
+                    query_data = StudentSurvey.objects.filter(instructor_survey_id=course_id, is_published=True).values()
+                    name = f"{course_prefix}Student Responses"
+                df = pd.DataFrame(list(query_data))
+            elif convert_type == 'instructor':
                 instructors = InstructorSurvey.objects.filter(status='published').values()
                 df = pd.DataFrame(list(instructors))
                 name = "Instructor Responses (Auto-Generated)"
@@ -626,23 +750,48 @@ class AdminSurveyToDatasetView(APIView):
                 return Response({"error": "Invalid type parameter"}, status=status.HTTP_400_BAD_REQUEST)
 
             if df.empty:
-                return Response({"error": "No data found for the selected survey type"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"error": "No response data found for the selected course/type"}, status=status.HTTP_404_NOT_FOUND)
 
-            # Convert datetimes
-            for col in df.columns:
-                if pd.api.types.is_datetime64_any_dtype(df[col]):
-                    df[col] = df[col].astype(str)
+            # Standardize survey feature names for both instructor and student datasets
+            col_rename = {}
+            for i in range(1, 7):
+                col_rename[f'content_p_{i}'] = f'content_{i}'
+                col_rename[f'content_s_{i}'] = f'content_{i}'
+            for i in range(1, 5):
+                col_rename[f'relevance_{i}p'] = f'relevance_{i}'
+                col_rename[f'relevance_{i}s'] = f'relevance_{i}'
+            for i in range(1, 7):
+                col_rename[f'discuss_{i}p'] = f'discuss_{i}'
+                col_rename[f'discuss_{i}s'] = f'discuss_{i}'
+            for i in range(1, 9):
+                col_rename[f'act_part_{i}p'] = f'act_part_{i}'
+                col_rename[f'act_part_{i}s'] = f'act_part_{i}'
+            for i in range(1, 6):
+                col_rename[f'cls_org_{i}p'] = f'cls_org_{i}'
+                col_rename[f'cls_org_{i}s'] = f'cls_org_{i}'
+            for i in range(1, 7):
+                col_rename[f'cncts_{i}p'] = f'cncts_{i}'
+                col_rename[f'cncts_{i}s'] = f'cncts_{i}'
 
-            data_dict = df.to_dict(orient='records')
-            
+            df.rename(columns=col_rename, inplace=True)
+
+            # Ensure dataframe date/datetime columns are JSON-safe before cleaning
+            records_json = df.to_json(orient='records', date_format='iso')
+            raw_records = json.loads(records_json)
+
+            # Clean dataset (converts Likert strings to numbers and handles NaNs)
+            cleaned_records = clean_dataset(raw_records)
+
             return Response({
                 "message": f"{name} retrieved successfully.",
-                "data": data_dict,
-                "columns": list(df.columns),
+                "data": cleaned_records,
+                "columns": [str(c) for c in df.columns],
                 "name": name
             })
         except Exception as e:
+            import traceback
+            print("AdminSurveyToDatasetView Error:", traceback.format_exc())
             return Response(
                 {"error": f"Failed to retrieve survey dataset: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            )

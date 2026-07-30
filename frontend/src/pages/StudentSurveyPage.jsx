@@ -262,13 +262,15 @@ export default function StudentSurveyPage() {
       }
 
       const activeToken = editToken || result?.edit_token;
+      const draftData = JSON.stringify({
+        formData,
+        activeSectionIdx,
+        timestamp: Date.now()
+      });
       if (activeToken) {
-        localStorage.setItem(`student_draft_${activeToken}`, JSON.stringify({
-          formData,
-          activeSectionIdx,
-          timestamp: Date.now()
-        }));
+        localStorage.setItem(`student_draft_${activeToken}`, draftData);
       }
+      localStorage.setItem('student_draft_latest', draftData);
 
       showToast('success', `💾 Draft saved on Section "${currentSection}"! Returning to summary...`);
       setTimeout(() => {
@@ -282,6 +284,22 @@ export default function StudentSurveyPage() {
       setLoading(false);
     }
   };
+
+  // ── Auto-Sync student draft and section index to localStorage ───────────────
+  React.useEffect(() => {
+    if (step === 'fill') {
+      const activeToken = editToken || courseCode;
+      const draftData = JSON.stringify({
+        formData,
+        activeSectionIdx,
+        timestamp: Date.now()
+      });
+      if (activeToken) {
+        localStorage.setItem(`student_draft_${activeToken}`, draftData);
+      }
+      localStorage.setItem('student_draft_latest', draftData);
+    }
+  }, [formData, activeSectionIdx, editToken, courseCode, step]);
 
   // Background Auto-Save for student drafts
   const autoSaveDraft = async () => {
@@ -614,10 +632,22 @@ export default function StudentSurveyPage() {
   }
 
   if (step === 'fill') {
-    const required     = STUDENT_FIELDS.filter(f => f.required);
-    const filled       = required.filter(f => formData[f.name] !== '').length;
-    const pct          = Math.round((filled / required.length) * 100);
-    const isFormReady  = filled === required.length;
+    const totalAllFields   = STUDENT_FIELDS.length;
+    const filledAllFields  = STUDENT_FIELDS.filter(f => formData[f.name] !== undefined && formData[f.name] !== null && formData[f.name] !== '').length;
+    const overallPct       = totalAllFields > 0 ? Math.round((filledAllFields / totalAllFields) * 100) : 0;
+
+    const activeSecName   = STUDENT_SECTIONS[activeSectionIdx] || STUDENT_SECTIONS[0];
+    const activeSecFields = STUDENT_FIELDS.filter(f => f.section === activeSecName);
+    const activeSecTotal  = activeSecFields.length;
+    const activeSecFilled = activeSecFields.filter(f => {
+      const v = formData[f.name];
+      return v !== undefined && v !== null && v !== '';
+    }).length;
+    const activeSecPct    = activeSecTotal > 0 ? Math.round((activeSecFilled / activeSecTotal) * 100) : 0;
+
+    const overallRequired = STUDENT_FIELDS.filter(f => f.required);
+    const overallFilled   = overallRequired.filter(f => formData[f.name] !== '' && formData[f.name] !== undefined && formData[f.name] !== null).length;
+    const isFormReady     = overallFilled >= overallRequired.length;
 
     return (
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 20px 100px' }}>
@@ -650,20 +680,107 @@ export default function StudentSurveyPage() {
             </div>
           </div>
 
-          {/* Progress */}
+          {/* Overall Form Completion Progress */}
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between',
-              fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, color: '#1e3a8a' }}>
-                Section {activeSectionIdx + 1} of {STUDENT_SECTIONS.length}: {STUDENT_SECTIONS[activeSectionIdx]}
+              fontSize: 12, color: '#64748b', marginBottom: 6 }}>
+              <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                Overall Form Completion Progress
               </span>
-              <span>{filled} / {required.length} required fields filled ({pct}%)</span>
+              <span style={{ fontWeight: 800, color: overallPct === 100 ? '#16a34a' : '#1e3a8a' }}>
+                {filledAllFields} / {totalAllFields} attributes filled ({overallPct}%)
+              </span>
             </div>
-            <div style={{ height: 6, background: '#e2e8f0', borderRadius: 99 }}>
-              <div style={{ height: '100%', width: `${pct}%`,
-                background: pct === 100 ? '#16a34a' : '#1e3a8a',
+            <div style={{ height: 8, background: '#e2e8f0', borderRadius: 99 }}>
+              <div style={{ height: '100%', width: `${overallPct}%`,
+                background: overallPct === 100 ? '#16a34a' : '#1e3a8a',
                 borderRadius: 99, transition: 'width 0.3s' }} />
             </div>
+          </div>
+
+          {/* 🚀 Dynamic Section Completion Timeline with Visible Scrollbar */}
+          <div style={{
+            display: 'flex', gap: 10, overflowX: 'auto', padding: '14px 4px 14px 4px',
+            margin: '16px 0 12px 0',
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#94a3b8 #f1f5f9'
+          }}>
+            {STUDENT_SECTIONS.map((secName, idx) => {
+              const secFields = STUDENT_FIELDS.filter(f => f.section === secName);
+              const total = secFields.length;
+              const secFilled = secFields.filter(f => {
+                const v = formData[f.name];
+                return v !== undefined && v !== null && v !== '';
+              }).length;
+              const secPct = total > 0 ? Math.round((secFilled / total) * 100) : 0;
+              const isComplete = total > 0 && secFilled === total;
+              const hasError = secFields.some(f => errors[f.name]);
+              const isActive = idx === activeSectionIdx;
+
+              let bg = '#f8fafc';
+              let borderColor = '#e2e8f0';
+              let textColor = '#64748b';
+              let badgeBg = '#cbd5e1';
+              let badgeColor = '#334155';
+
+              if (isActive) {
+                bg = '#eff6ff';
+                borderColor = '#1e3a8a';
+                textColor = '#1e3a8a';
+                badgeBg = '#1e3a8a';
+                badgeColor = '#ffffff';
+              } else if (hasError) {
+                bg = '#fef2f2';
+                borderColor = '#fecaca';
+                textColor = '#dc2626';
+                badgeBg = '#dc2626';
+                badgeColor = '#ffffff';
+              } else if (isComplete) {
+                bg = '#f0fdf4';
+                borderColor = '#bbf7d0';
+                textColor = '#15803d';
+                badgeBg = '#16a34a';
+                badgeColor = '#ffffff';
+              }
+
+              return (
+                <button
+                  key={secName}
+                  type="button"
+                  onClick={(e) => {
+                    setActiveSectionIdx(idx);
+                    e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 14px', borderRadius: 99,
+                    background: bg, border: `1.5px solid ${borderColor}`,
+                    color: textColor, fontWeight: isActive ? 800 : 700,
+                    fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+                    transition: 'all 0.2s', flexShrink: 0,
+                    boxShadow: isActive ? '0 4px 12px rgba(30,58,138,0.12)' : 'none'
+                  }}
+                >
+                  <span style={{
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: badgeBg, color: badgeColor,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 10, fontWeight: 900
+                  }}>
+                    {isComplete ? '✓' : idx + 1}
+                  </span>
+                  <span>{secName}</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 800,
+                    padding: '2px 6px', borderRadius: 99,
+                    background: isComplete ? '#dcfce7' : isActive ? '#dbeafe' : '#e2e8f0',
+                    color: isComplete ? '#166534' : isActive ? '#1e40af' : '#475569'
+                  }}>
+                    {secPct}%
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -705,6 +822,13 @@ export default function StudentSurveyPage() {
           const sectionHasError = sectionFields.some(f => errors[f.name]);
           const sIdx = activeSectionIdx;
 
+          const totalSec = sectionFields.length;
+          const secFilled = sectionFields.filter(f => {
+            const v = formData[f.name];
+            return v !== undefined && v !== null && v !== '';
+          }).length;
+          const secPct = totalSec > 0 ? Math.round((secFilled / totalSec) * 100) : 100;
+
           return (
             <motion.div key={section}
               initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }}
@@ -717,25 +841,40 @@ export default function StudentSurveyPage() {
                 transition: 'border-color 0.2s',
               }}>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: 8,
-                  background: sectionHasError ? '#fef2f2' : '#eff6ff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 13, fontWeight: 900,
-                  color: sectionHasError ? '#dc2626' : '#1e3a8a',
-                }}>
-                  {sIdx + 1}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 8,
+                    background: sectionHasError ? '#fef2f2' : '#eff6ff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 13, fontWeight: 900,
+                    color: sectionHasError ? '#dc2626' : '#1e3a8a',
+                  }}>
+                    {sIdx + 1}
+                  </div>
+                  <h2 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                    {section}
+                  </h2>
+                  {sectionHasError && (
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#dc2626',
+                      background: '#fef2f2', padding: '2px 8px', borderRadius: 99 }}>
+                      Has errors
+                    </span>
+                  )}
                 </div>
-                <h2 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                  {section}
-                </h2>
-                {sectionHasError && (
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#dc2626',
-                    background: '#fef2f2', padding: '2px 8px', borderRadius: 99 }}>
-                    Has errors
-                  </span>
-                )}
+
+                <span style={{ fontSize: 12, fontWeight: 800, color: secFilled === totalSec ? '#16a34a' : '#1e3a8a' }}>
+                  Section Progress: {secFilled} / {totalSec} filled ({secPct}%)
+                </span>
+              </div>
+
+              {/* Dynamic Section Progress Bar */}
+              <div style={{ height: 4, background: '#f1f5f9', borderRadius: 99, marginBottom: 24, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', width: `${secPct}%`,
+                  background: secPct === 100 ? '#16a34a' : '#1e3a8a',
+                  borderRadius: 99, transition: 'width 0.3s'
+                }} />
               </div>
 
               <div style={{

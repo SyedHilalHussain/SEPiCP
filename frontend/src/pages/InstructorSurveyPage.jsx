@@ -184,23 +184,38 @@ export default function InstructorSurveyPage() {
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const isMandatory = location.state?.mandatory;
 
-  // ── Resume saved draft at exact tab index ────────────────────────────────
+  // ── Resume saved draft at exact section index ─────────────────────────────
   React.useEffect(() => {
     const targetId = surveyId || location.state?.surveyId;
-    if (targetId) {
-      const localDraft = localStorage.getItem(`instructor_draft_${targetId}`);
-      if (localDraft) {
-        try {
-          const { formData: savedData, activeSectionIdx: savedIdx } = JSON.parse(localDraft);
-          if (savedData) setFormData(prev => ({ ...prev, ...savedData }));
-          if (typeof savedIdx === 'number' && savedIdx >= 0 && savedIdx < VISIBLE_SECTIONS.length) {
-            setActiveSectionIdx(savedIdx);
-            showToast('info', `ℹ️ Resumed survey at Section "${VISIBLE_SECTIONS[savedIdx]}".`);
-          }
-        } catch (e) { console.error(e); }
-      }
+    const localDraft = (targetId && localStorage.getItem(`instructor_draft_${targetId}`)) ||
+                       localStorage.getItem('instructor_draft_latest');
+    if (localDraft) {
+      try {
+        const { formData: savedData, activeSectionIdx: savedIdx } = JSON.parse(localDraft);
+        if (savedData) setFormData(prev => ({ ...prev, ...savedData }));
+        if (typeof savedIdx === 'number' && savedIdx >= 0 && savedIdx < VISIBLE_SECTIONS.length) {
+          setActiveSectionIdx(savedIdx);
+          showToast('info', `ℹ️ Resumed survey draft at Section "${VISIBLE_SECTIONS[savedIdx]}".`);
+        }
+      } catch (e) { console.error(e); }
     }
   }, [surveyId, location.state]);
+
+  // ── Auto-Sync current draft and active section to localStorage ──────────────
+  React.useEffect(() => {
+    if (step === 'fill') {
+      const targetId = surveyId || location.state?.surveyId;
+      const draftData = JSON.stringify({
+        formData,
+        activeSectionIdx,
+        timestamp: Date.now()
+      });
+      if (targetId) {
+        localStorage.setItem(`instructor_draft_${targetId}`, draftData);
+      }
+      localStorage.setItem('instructor_draft_latest', draftData);
+    }
+  }, [formData, activeSectionIdx, surveyId, location.state, step]);
 
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -535,10 +550,22 @@ export default function InstructorSurveyPage() {
   }
 
   // ── STEP: FILL ─────────────────────────────────────────────────────────────
-  const required = INSTRUCTOR_FIELDS.filter(f => f.required);
-  const filled = required.filter(f => formData[f.name] !== '').length;
-  const pct = Math.round((filled / required.length) * 100);
-  const isFormReady = filled === required.length; // all required fields filled
+  const totalAllFields   = SURVEY_FIELDS.length;
+  const filledAllFields  = SURVEY_FIELDS.filter(f => formData[f.name] !== undefined && formData[f.name] !== null && formData[f.name] !== '').length;
+  const overallPct       = totalAllFields > 0 ? Math.round((filledAllFields / totalAllFields) * 100) : 0;
+
+  const activeSecName   = VISIBLE_SECTIONS[activeSectionIdx] || VISIBLE_SECTIONS[0];
+  const activeSecFields = SURVEY_FIELDS.filter(f => f.section === activeSecName);
+  const activeSecTotal  = activeSecFields.length;
+  const activeSecFilled = activeSecFields.filter(f => {
+    const v = formData[f.name];
+    return v !== undefined && v !== null && v !== '';
+  }).length;
+  const activeSecPct    = activeSecTotal > 0 ? Math.round((activeSecFilled / activeSecTotal) * 100) : 0;
+
+  const required     = SURVEY_FIELDS.filter(f => f.required);
+  const filled       = required.filter(f => formData[f.name] !== undefined && formData[f.name] !== null && formData[f.name] !== '').length;
+  const isFormReady  = filled >= required.length;
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 20px 100px' }}>
@@ -570,22 +597,111 @@ export default function InstructorSurveyPage() {
           </div>
         </div>
 
-        {/* Progress */}
+        {/* Overall Form Completion Progress */}
         <div style={{ marginTop: 16 }}>
           <div style={{
             display: 'flex', justifyContent: 'space-between',
-            fontSize: 12, color: '#94a3b8', marginBottom: 6
+            fontSize: 12, color: '#64748b', marginBottom: 6
           }}>
-            <span>Required fields</span>
-            <span>{filled} / {required.length}</span>
+            <span style={{ fontWeight: 800, color: '#0f172a' }}>
+              Overall Form Completion Progress
+            </span>
+            <span style={{ fontWeight: 800, color: overallPct === 100 ? '#16a34a' : '#1e3a8a' }}>
+              {filledAllFields} / {totalAllFields} attributes filled ({overallPct}%)
+            </span>
           </div>
-          <div style={{ height: 6, background: '#e2e8f0', borderRadius: 99 }}>
+          <div style={{ height: 8, background: '#e2e8f0', borderRadius: 99 }}>
             <div style={{
-              height: '100%', width: `${pct}%`,
-              background: pct === 100 ? '#16a34a' : '#1e3a8a',
+              height: '100%', width: `${overallPct}%`,
+              background: overallPct === 100 ? '#16a34a' : '#1e3a8a',
               borderRadius: 99, transition: 'width 0.3s'
             }} />
           </div>
+        </div>
+
+        {/* 🚀 Dynamic Section Completion Timeline with Visible Scrollbar */}
+        <div style={{
+          display: 'flex', gap: 10, overflowX: 'auto', padding: '14px 4px 14px 4px',
+          margin: '16px 0 12px 0',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#94a3b8 #f1f5f9'
+        }}>
+          {VISIBLE_SECTIONS.map((secName, idx) => {
+            const secFields = INSTRUCTOR_FIELDS.filter(f => f.section === secName);
+            const total = secFields.length;
+            const secFilled = secFields.filter(f => {
+              const v = formData[f.name];
+              return v !== undefined && v !== null && v !== '';
+            }).length;
+            const secPct = total > 0 ? Math.round((secFilled / total) * 100) : 0;
+            const isComplete = total > 0 && secFilled === total;
+            const hasError = secFields.some(f => errors[f.name]);
+            const isActive = idx === activeSectionIdx;
+
+            let bg = '#f8fafc';
+            let borderColor = '#e2e8f0';
+            let textColor = '#64748b';
+            let badgeBg = '#cbd5e1';
+            let badgeColor = '#334155';
+
+            if (isActive) {
+              bg = '#eff6ff';
+              borderColor = '#1e3a8a';
+              textColor = '#1e3a8a';
+              badgeBg = '#1e3a8a';
+              badgeColor = '#ffffff';
+            } else if (hasError) {
+              bg = '#fef2f2';
+              borderColor = '#fecaca';
+              textColor = '#dc2626';
+              badgeBg = '#dc2626';
+              badgeColor = '#ffffff';
+            } else if (isComplete) {
+              bg = '#f0fdf4';
+              borderColor = '#bbf7d0';
+              textColor = '#15803d';
+              badgeBg = '#16a34a';
+              badgeColor = '#ffffff';
+            }
+
+            return (
+              <button
+                key={secName}
+                type="button"
+                onClick={(e) => {
+                  setActiveSectionIdx(idx);
+                  e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 14px', borderRadius: 99,
+                  background: bg, border: `1.5px solid ${borderColor}`,
+                  color: textColor, fontWeight: isActive ? 800 : 700,
+                  fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+                  transition: 'all 0.2s', flexShrink: 0,
+                  boxShadow: isActive ? '0 4px 12px rgba(30,58,138,0.12)' : 'none'
+                }}
+              >
+                <span style={{
+                  width: 20, height: 20, borderRadius: '50%',
+                  background: badgeBg, color: badgeColor,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 900
+                }}>
+                  {isComplete ? '✓' : idx + 1}
+                </span>
+                <span>{secName}</span>
+                <span style={{
+                  fontSize: 10, fontWeight: 800,
+                  padding: '2px 6px', borderRadius: 99,
+                  background: isComplete ? '#dcfce7' : isActive ? '#dbeafe' : '#e2e8f0',
+                  color: isComplete ? '#166534' : isActive ? '#1e40af' : '#475569'
+                }}>
+                  {secPct}%
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -632,7 +748,12 @@ export default function InstructorSurveyPage() {
         const sectionHasError = sectionFields.some(f => errors[f.name]);
         const sIdx = activeSectionIdx;
 
-
+        const totalSec = sectionFields.length;
+        const secFilled = sectionFields.filter(f => {
+          const v = formData[f.name];
+          return v !== undefined && v !== null && v !== '';
+        }).length;
+        const secPct = totalSec > 0 ? Math.round((secFilled / totalSec) * 100) : 100;
 
         return (
           <motion.div key={section}
@@ -645,27 +766,42 @@ export default function InstructorSurveyPage() {
             }}>
 
             {/* Section Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: 8,
-                background: sectionHasError ? '#fef2f2' : '#eff6ff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: 900,
-                color: sectionHasError ? '#dc2626' : '#1e3a8a',
-              }}>
-                {sIdx + 1}
-              </div>
-              <h2 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                {section}
-              </h2>
-              {sectionHasError && (
-                <span style={{
-                  fontSize: 11, fontWeight: 800, color: '#dc2626',
-                  background: '#fef2f2', padding: '2px 8px', borderRadius: 99
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 8,
+                  background: sectionHasError ? '#fef2f2' : '#eff6ff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 13, fontWeight: 900,
+                  color: sectionHasError ? '#dc2626' : '#1e3a8a',
                 }}>
-                  Has errors
-                </span>
-              )}
+                  {sIdx + 1}
+                </div>
+                <h2 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                  {section}
+                </h2>
+                {sectionHasError && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 800, color: '#dc2626',
+                    background: '#fef2f2', padding: '2px 8px', borderRadius: 99
+                  }}>
+                    Has errors
+                  </span>
+                )}
+              </div>
+
+              <span style={{ fontSize: 12, fontWeight: 800, color: secFilled === totalSec ? '#16a34a' : '#1e3a8a' }}>
+                Section Progress: {secFilled} / {totalSec} filled ({secPct}%)
+              </span>
+            </div>
+
+            {/* Dynamic Section Progress Bar */}
+            <div style={{ height: 4, background: '#f1f5f9', borderRadius: 99, marginBottom: 24, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', width: `${secPct}%`,
+                background: secPct === 100 ? '#16a34a' : '#1e3a8a',
+                borderRadius: 99, transition: 'width 0.3s'
+              }} />
             </div>
 
             {/* Fields Grid */}
@@ -803,18 +939,18 @@ export default function InstructorSurveyPage() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={loading || !isFormReady}
-              title={!isFormReady ? `Fill all required fields (${filled}/${required.length} done)` : ''}
+              disabled={loading}
+              title={!isFormReady ? `Required fields completed: (${filled}/${required.length})` : ''}
               style={{
                 padding: '14px 32px', borderRadius: 12,
-                background: isFormReady ? '#1e3a8a' : '#cbd5e1',
-                color: isFormReady ? '#fff' : '#94a3b8',
+                background: '#1e3a8a',
+                color: '#fff',
                 border: 'none',
                 fontWeight: 900, fontSize: 15,
-                cursor: isFormReady ? 'pointer' : 'not-allowed',
-                boxShadow: isFormReady ? '0 8px 24px rgba(30,58,138,0.25)' : 'none',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                transition: 'background 0.3s, color 0.3s, box-shadow 0.3s',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                boxShadow: '0 8px 24px rgba(30,58,138,0.25)',
+                display: 'flex', itemsCenter: 'center', justifyContent: 'center', gap: 8,
+                transition: 'all 0.3s',
               }}
             >
               {loading ? 'Saving...' : <>Save &amp; Review <ChevronRight size={18} /></>}
