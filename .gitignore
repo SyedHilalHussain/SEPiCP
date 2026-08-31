@@ -20,6 +20,8 @@ db.sqlite3
 # Runtime logs (keep logs/.gitkeep for IIS / HttpPlatformHandler)
 logs/*.log
 logs/*.txt
+backend/logs/*.log
+*.log
 
 # Python cache files
 __pycache__/
