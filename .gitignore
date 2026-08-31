@@ -1,8 +1,11 @@
-# Environments
+# Environments & Secrets
 .venv
 env/
 venv/
 ENV/
+.env
+*.env
+.env.*
 
 # Frontend build output (Vite → Django static/site)
 static/site/
@@ -30,3 +33,8 @@ __pycache__/
 
 config.bat
 node_modules
+
+# ChromaDB & Vector Indexes (too large for GitHub, generated locally via ingest.py)
+chroma_db/
+**/chroma_db/
+*.bin
