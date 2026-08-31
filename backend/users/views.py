@@ -128,6 +128,29 @@ class UploadDatasetView(APIView):
                 for i in range(1, 7):
                     col_rename[f'cncts_{i}p'] = f'cncts_{i}'
                     col_rename[f'cncts_{i}s'] = f'cncts_{i}'
+                for i in range(1, 5):
+                    col_rename[f'challenge_level_{i}p'] = f'challenge_level_{i}'
+                    col_rename[f'challenge_level_{i}s'] = f'challenge_level_{i}'
+                for i in range(1, 20):
+                    col_rename[f'methods_p_{i}'] = f'methods_{i}'
+                    col_rename[f'methods_s_{i}'] = f'methods_{i}'
+                for i in [16, 17, 18]:
+                    col_rename[f'methods_p_{i}_text'] = f'methods_{i}_text'
+                    col_rename[f'methods_s_{i}_text'] = f'methods_{i}_text'
+
+                # Metadata column corrections (name, university, etc.)
+                col_rename['q1_name'] = 'name'
+                col_rename['q2_university'] = 'university'
+                col_rename['q108_email'] = 'email'
+                col_rename['q109_location'] = 'location'
+                col_rename['q3_semester'] = 'semester'
+                col_rename['q4_course'] = 'course'
+                col_rename['q111_degree_level'] = 'degree_level'
+                col_rename['q104_student_count'] = 'student_count'
+                col_rename['q105_class_format'] = 'class_format'
+                col_rename['q107_1_online_pct'] = 'online_pct'
+                col_rename['q6_role'] = 'role'
+                col_rename['q6_2_text'] = 'professor_name'
 
                 df.rename(columns=col_rename, inplace=True)
                 original_data = json.loads(df.to_json(orient='records', date_format='iso'))
@@ -300,14 +323,33 @@ class BasicAnalysisView(APIView):
             return Response({"error": "Missing required parameter: dataset contains no valid rows."}, 
                             status=status.HTTP_400_BAD_REQUEST)
 
+        # Apply column filter if selected_columns is provided
+        selected_columns = request.data.get("selected_columns")
+        if selected_columns and isinstance(selected_columns, list) and len(selected_columns) > 0:
+            sel_set = {str(c).strip().lower() for c in selected_columns}
+            filtered_data = []
+            for row in data:
+                if isinstance(row, dict):
+                    filtered_row = {k: v for k, v in row.items() if str(k).strip().lower() in sel_set}
+                    filtered_data.append(filtered_row)
+                else:
+                    filtered_data.append(row)
+            data = filtered_data
+
         try:
             results = perform_basic_analysis(data)
 
             # Store in database
+            input_params = {}
+            if dataset_id:
+                input_params["dataset_id"] = dataset_id
+            if selected_columns:
+                input_params["selected_columns"] = selected_columns
+
             AnalysisResult.objects.create(
                 user=request.user,
                 analysis_type='basic',
-                input_params={"dataset_id": dataset_id} if dataset_id else {},
+                input_params=input_params,
                 output_results=results
             )
 
@@ -356,7 +398,7 @@ class TeacherDashboardView(APIView):
 
         return Response({
             'has_survey': has_survey,
-            'instructor_name': request.user.username,
+            'instructor_name': request.user.first_name or request.user.username,
             'instructor_email': request.user.email,
             'courses': data
         })
@@ -431,13 +473,13 @@ class StudentSurveyLookupView(APIView):
         if not code:
             return Response({'error': 'course_code is required'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            survey = InstructorSurvey.objects.get(course_code=code)
+            survey = InstructorSurvey.objects.select_related('teacher').get(course_code=code)
         except InstructorSurvey.DoesNotExist:
             return Response({'error': 'Invalid course code. Check with your instructor.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({
             'survey_id':       survey.id,
             'course_code':     survey.course_code,
-            'instructor_name': survey.q1_name,
+            'instructor_name': survey.q1_name or survey.teacher.first_name or survey.teacher.username,
             'course_name':     survey.q4_course,
             'department':      survey.q2_university,
             'semester':        survey.q3_semester,
@@ -496,17 +538,19 @@ class StudentSurveySubmitView(APIView):
 class StudentSurveyEditView(APIView):
     """GET / PUT — retrieve or update a student submission via edit_token."""
     permission_classes = [AllowAny]
-
     def get(self, request, token):
         try:
-            survey = StudentSurvey.objects.get(edit_token=token)
+            survey = StudentSurvey.objects.select_related('instructor_survey__teacher').get(edit_token=token)
         except (StudentSurvey.DoesNotExist, ValueError):
             return Response({'error': 'Invalid or expired edit token.'}, status=status.HTTP_404_NOT_FOUND)
 
         if survey.is_published:
             return Response({'error': 'This response has been published and cannot be edited.'}, status=status.HTTP_403_FORBIDDEN)
 
-        return Response(StudentSurveySerializer(survey).data)
+        data = StudentSurveySerializer(survey).data
+        data['course_name'] = survey.instructor_survey.q4_course
+        data['instructor_name'] = survey.instructor_survey.q1_name or survey.instructor_survey.teacher.first_name or survey.instructor_survey.teacher.username
+        return Response(data)
 
     def put(self, request, token):
         try:
@@ -548,7 +592,7 @@ class AdminSurveyListView(APIView):
                 teachers_map[t_id] = {
                     'teacher_id': t_id,
                     'teacher_email': t.email,
-                    'teacher_name': s.q1_name or t.username,
+                    'teacher_name': t.first_name or t.username,
                     'surveys': []
                 }
             
@@ -564,7 +608,8 @@ class AdminSurveyListView(APIView):
                 'status': s.status,
                 'instructor_completed': s.status == InstructorSurvey.STATUS_PUBLISHED,
                 'completed_student_count': completed_students,
-                'uncompleted_student_count': uncompleted_students
+                'uncompleted_student_count': uncompleted_students,
+                'saved_student_count': uncompleted_students
             })
             
         return Response(list(teachers_map.values()))
@@ -623,6 +668,29 @@ class AdminSurveyExportView(APIView):
             for i in range(1, 7):
                 col_rename[f'cncts_{i}p'] = f'cncts_{i}'
                 col_rename[f'cncts_{i}s'] = f'cncts_{i}'
+            for i in range(1, 5):
+                col_rename[f'challenge_level_{i}p'] = f'challenge_level_{i}'
+                col_rename[f'challenge_level_{i}s'] = f'challenge_level_{i}'
+            for i in range(1, 20):
+                col_rename[f'methods_p_{i}'] = f'methods_{i}'
+                col_rename[f'methods_s_{i}'] = f'methods_{i}'
+            for i in [16, 17, 18]:
+                col_rename[f'methods_p_{i}_text'] = f'methods_{i}_text'
+                col_rename[f'methods_s_{i}_text'] = f'methods_{i}_text'
+
+            # Metadata column corrections (name, university, etc.)
+            col_rename['q1_name'] = 'name'
+            col_rename['q2_university'] = 'university'
+            col_rename['q108_email'] = 'email'
+            col_rename['q109_location'] = 'location'
+            col_rename['q3_semester'] = 'semester'
+            col_rename['q4_course'] = 'course'
+            col_rename['q111_degree_level'] = 'degree_level'
+            col_rename['q104_student_count'] = 'student_count'
+            col_rename['q105_class_format'] = 'class_format'
+            col_rename['q107_1_online_pct'] = 'online_pct'
+            col_rename['q6_role'] = 'role'
+            col_rename['q6_2_text'] = 'professor_name'
 
             if course_id:
                 survey = InstructorSurvey.objects.get(pk=course_id)
@@ -772,6 +840,29 @@ class AdminSurveyToDatasetView(APIView):
             for i in range(1, 7):
                 col_rename[f'cncts_{i}p'] = f'cncts_{i}'
                 col_rename[f'cncts_{i}s'] = f'cncts_{i}'
+            for i in range(1, 5):
+                col_rename[f'challenge_level_{i}p'] = f'challenge_level_{i}'
+                col_rename[f'challenge_level_{i}s'] = f'challenge_level_{i}'
+            for i in range(1, 20):
+                col_rename[f'methods_p_{i}'] = f'methods_{i}'
+                col_rename[f'methods_s_{i}'] = f'methods_{i}'
+            for i in [16, 17, 18]:
+                col_rename[f'methods_p_{i}_text'] = f'methods_{i}_text'
+                col_rename[f'methods_s_{i}_text'] = f'methods_{i}_text'
+
+            # Metadata column corrections (name, university, etc.)
+            col_rename['q1_name'] = 'name'
+            col_rename['q2_university'] = 'university'
+            col_rename['q108_email'] = 'email'
+            col_rename['q109_location'] = 'location'
+            col_rename['q3_semester'] = 'semester'
+            col_rename['q4_course'] = 'course'
+            col_rename['q111_degree_level'] = 'degree_level'
+            col_rename['q104_student_count'] = 'student_count'
+            col_rename['q105_class_format'] = 'class_format'
+            col_rename['q107_1_online_pct'] = 'online_pct'
+            col_rename['q6_role'] = 'role'
+            col_rename['q6_2_text'] = 'professor_name'
 
             df.rename(columns=col_rename, inplace=True)
 
