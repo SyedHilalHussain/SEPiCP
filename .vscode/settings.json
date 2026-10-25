@@ -1,6 +1,0 @@
-{
-  "search.exclude": {
-    "**/.sst": true
-  },
-  "editor.defaultFormatter": "esbenp.prettier-vscode"
-}
